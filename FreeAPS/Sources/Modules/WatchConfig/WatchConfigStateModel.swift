@@ -28,12 +28,20 @@ enum AwConfig: String, JSON, CaseIterable, Identifiable, Codable {
 extension WatchConfig {
     final class StateModel: BaseStateModel<Provider> {
         @Injected() private var garmin: GarminManager!
+        @Injected() private var pebble: PebbleManager!
         @Published var devices: [IQDevice] = []
         @Published var selectedAwConfig: AwConfig = .HR
         @Published var displayFatAndProteinOnWatch = false
         @Published var confirmBolusFaster = false
+        @Published var pebbleEnabled = false
+        @Published var pebbleRunning = false
+        @Published var pebblePort: UInt16 = 8080
 
         private(set) var preferences = Preferences()
+
+        var pebbleCommandManager: PebbleCommandManager {
+            (pebble as? BasePebbleManager)?.getCommandManager() ?? PebbleCommandManager()
+        }
 
         override func subscribe() {
             preferences = provider.preferences
@@ -52,6 +60,20 @@ extension WatchConfig {
             }
 
             devices = garmin.devices
+
+            pebbleEnabled = pebble.isEnabled
+            pebbleRunning = pebble.isRunning
+            if let basePebble = pebble as? BasePebbleManager {
+                pebblePort = basePebble.getCurrentPort()
+            }
+
+            $pebbleEnabled
+                .dropFirst()
+                .sink { [weak self] enabled in
+                    self?.pebble.isEnabled = enabled
+                    self?.pebbleRunning = self?.pebble.isRunning ?? false
+                }
+                .store(in: &lifetime)
         }
 
         func selectGarminDevices() {

@@ -18,6 +18,7 @@ final class BaseWatchManager: NSObject, WatchManager, Injectable {
     @Injected() private var carbsStorage: CarbsStorage!
     @Injected() private var tempTargetsStorage: TempTargetsStorage!
     @Injected() private var garmin: GarminManager!
+    @Injected() private var pebble: PebbleManager!
 
     let coredataContext = CoreDataStack.shared.persistentContainer.viewContext // newBackgroundContext()
 
@@ -50,6 +51,35 @@ final class BaseWatchManager: NSObject, WatchManager, Injectable {
                 return Data()
             }
             return data
+        }
+
+        pebble.stateRequest = { [weak self] () -> Data in
+            guard let self = self, let data = try? JSONEncoder().encode(self.state) else {
+                warning(.service, "Cannot encode watch state for Pebble")
+                return Data()
+            }
+            return data
+        }
+
+        if let basePebble = pebble as? BasePebbleManager {
+            basePebble.getCommandManager().executeBolus = { [weak self] units in
+                self?.apsManager.enactBolus(amount: units, isSMB: false)
+            }
+            basePebble.getCommandManager().executeCarbs = { [weak self] grams, _ in
+                self?.carbsStorage.storeCarbs(
+                    [CarbsEntry(
+                        id: UUID().uuidString,
+                        createdAt: Date.now,
+                        carbs: Decimal(grams),
+                        fat: 0,
+                        protein: 0,
+                        note: nil,
+                        enteredBy: CarbsEntry.manual,
+                        isFPU: false,
+                        fpuID: nil
+                    )]
+                )
+            }
         }
 
         configureState()
@@ -114,6 +144,10 @@ final class BaseWatchManager: NSObject, WatchManager, Injectable {
 
             self.state.isf = self.suggestion?.isf
 
+            let recentGlucose = self.glucoseStorage.recent()
+            let historyValues = recentGlucose.suffix(36).compactMap { $0.glucose }
+            self.state.glucoseHistory = historyValues.isEmpty ? nil : historyValues
+
             var overrideArray = [Override]()
             let requestOverrides = Override.fetchRequest() as NSFetchRequest<Override>
             let sortOverride = NSSortDescriptor(key: "date", ascending: false)
@@ -141,6 +175,7 @@ final class BaseWatchManager: NSObject, WatchManager, Injectable {
         }
 
         garmin.sendState(data)
+        pebble.sendState(data)
 
         guard session.isReachable else { return }
         session.sendMessageData(data, replyHandler: nil) { error in

@@ -32,6 +32,28 @@ extension WatchConfig {
                         state.selectGarminDevices()
                     }
                 }
+
+                Section(header: Text("Pebble Watch")) {
+                    Toggle("Enable Pebble Integration", isOn: $state.pebbleEnabled)
+                    if state.pebbleEnabled {
+                        HStack {
+                            Text("API Port")
+                            Spacer()
+                            Text("\(state.pebblePort)")
+                                .foregroundColor(.secondary)
+                        }
+                        HStack {
+                            Text("Status")
+                            Spacer()
+                            Text(state.pebbleRunning ? "Running" : "Stopped")
+                                .foregroundColor(state.pebbleRunning ? .green : .secondary)
+                        }
+                        NavigationLink("Pending Commands") {
+                            PebbleCommandConfirmationView(commandManager: state.pebbleCommandManager)
+                                .navigationTitle("Pebble Requests")
+                        }
+                    }
+                }
             }
             .onAppear(perform: configureView)
             .navigationTitle("Watch Configuration")

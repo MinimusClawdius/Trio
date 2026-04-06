@@ -1,0 +1,49 @@
+{
+    "uuid": "b7c3d4e5-f6a7-8901-bcde-f12345678901",
+    "shortName": "Trio CGM",
+    "longName": "Trio CGM Monitor",
+    "companyName": "Trio Community",
+    "versionCode": 1,
+    "versionLabel": "1.0.0",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": [
+        "aplite",
+        "basalt",
+        "chalk",
+        "diorite",
+        "emery"
+    ],
+    "watchapp": {
+        "watchface": false,
+        "hiddenApp": false,
+        "onlyShownOnCommunication": false
+    },
+    "capabilities": [
+        "configurable"
+    ],
+    "resources": {
+        "media": [
+            {
+                "type": "png",
+                "name": "IMAGE_ICON",
+                "file": "images/icon.png"
+            },
+            {
+                "type": "png",
+                "name": "IMAGE_BOLUS",
+                "file": "images/icon_bolus.png"
+            },
+            {
+                "type": "png",
+                "name": "IMAGE_CARBS",
+                "file": "images/icon_carbs.png"
+            },
+            {
+                "type": "png",
+                "name": "IMAGE_ALERT",
+                "file": "images/icon_alert.png"
+            }
+        ]
+    }
+}

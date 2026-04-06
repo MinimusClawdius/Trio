@@ -25,6 +25,7 @@ struct WatchState: Codable {
     var confirmBolusFaster: Bool?
     var isf: Decimal?
     var override: String?
+    var glucoseHistory: [Int]?
 }
 
 struct TempTargetWatchPreset: Codable, Identifiable {
