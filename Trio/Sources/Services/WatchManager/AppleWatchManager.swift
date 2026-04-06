@@ -290,8 +290,9 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
                     watchState.currentGlucose = "\(latestGlucose.glucose)"
                 } else {
                     let mgdlValue = Decimal(latestGlucose.glucose)
-                    let latestGlucoseValue = mgdlValue.formattedAsMmolL
-                    watchState.currentGlucose = "\(latestGlucoseValue)"
+                    let mmol = mgdlValue.asMmolL
+                    watchState.currentGlucose = Formatter.glucoseFormatter(for: .mmolL).string(from: mmol as NSDecimalNumber)
+                        ?? mgdlValue.formattedAsMmolL
                 }
 
                 /// Calculate latest color

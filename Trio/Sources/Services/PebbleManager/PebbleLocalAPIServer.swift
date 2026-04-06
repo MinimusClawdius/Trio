@@ -9,6 +9,11 @@ import Glibc
 
 /// Lightweight HTTP server on 127.0.0.1 that exposes Trio data
 /// to the PebbleKit JS bridge running in the Rebble companion app.
+///
+/// **Not the same as Garmin:** `GarminManager` uses Garmin Connect IQ to send messages to the
+/// watch while Trio is active. This server answers HTTP **pull** requests on loopback. iOS will
+/// **suspend** Trio when another app is frontmost, so Safari/Rebble cannot rely on this URL staying
+/// reachable indefinitely — only a ~25s background extension is started per accepted connection.
 final class PebbleLocalAPIServer {
     private var serverSocket: Int32 = -1
     private var isRunning = false
