@@ -13,6 +13,7 @@ extension WatchConfig {
     final class StateModel: BaseStateModel<Provider> {
         @Injected() private var garmin: GarminManager!
         @Injected() private var pebble: PebbleManager!
+        @Injected() private var watchManager: WatchManager!
 
         @Published var units: GlucoseUnits = .mgdL
         @Published var devices: [IQDevice] = []
@@ -58,6 +59,11 @@ extension WatchConfig {
                     self?.pebbleRunning = self?.pebble.isRunning ?? false
                     if enabled == false {
                         self?.lastPebbleConnectionTest = nil
+                    } else if enabled {
+                        Task { [weak self] in
+                            guard let self else { return }
+                            await self.watchManager.refreshPebbleAndWatchDisplay()
+                        }
                     }
                 }
                 .store(in: &lifetime)
