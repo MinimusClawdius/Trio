@@ -2,8 +2,23 @@ import Foundation
 
 /// Translates Trio's dev-branch WatchState into JSON endpoint responses
 /// for the Pebble local HTTP API.
+///
+/// **Persistence vs Garmin:** Garmin uses Connect IQ to push JSON to the watch when Trio runs.
+/// This API is an HTTP server on `127.0.0.1`; when iOS **suspends** Trio (Safari or Rebble in front),
+/// the process stops serving — there is no always-on socket like a desktop server. A short
+/// background task runs only when a request is accepted. Last-good JSON is cached on-device so
+/// a brief foreground session can still return readings if Core Data is momentarily empty.
 final class PebbleDataBridge {
     private let lock = NSLock()
+
+    private static let cachedCGMJSONKey = "PebbleDataBridge.cached.cgmJSON"
+    private static let cachedCGMJSONAtKey = "PebbleDataBridge.cached.cgmJSON.at"
+    private static let cacheMaxAge: TimeInterval = 24 * 3600
+
+    /// Set by `BasePebbleManager` to reflect PebbleKit iOS BLE connectivity.
+    /// When `true`, PebbleKit JS should reduce HTTP polling because the watch
+    /// is receiving data directly via BLE push.
+    var isBLEPushActive: Bool = false
 
     private var currentGlucose: String?
     private var currentGlucoseColor: String?
@@ -48,6 +63,26 @@ final class PebbleDataBridge {
     // MARK: - JSON Endpoints
 
     func cgmJSON() -> String {
+        let fresh = buildCgmJSONLocked()
+        if shouldFallbackToCachedCGM(fresh) {
+            if let cached = UserDefaults.standard.string(forKey: Self.cachedCGMJSONKey),
+               let ts = UserDefaults.standard.object(forKey: Self.cachedCGMJSONAtKey) as? TimeInterval,
+               Date().timeIntervalSince1970 - ts < Self.cacheMaxAge
+            {
+                return cached
+            }
+        } else {
+            UserDefaults.standard.set(fresh, forKey: Self.cachedCGMJSONKey)
+            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.cachedCGMJSONAtKey)
+        }
+        return fresh
+    }
+
+    func loopJSON() -> String {
+        buildLoopJSONLocked()
+    }
+
+    private func buildCgmJSONLocked() -> String {
         lock.lock()
         defer { lock.unlock() }
 
@@ -60,7 +95,7 @@ final class PebbleDataBridge {
         return "{\"glucose\":\(glucoseStr),\"trend\":\(trendStr),\"delta\":\(deltaStr),\"date\":\(dateStr),\"isStale\":\(stale),\"units\":\"\(units)\"}"
     }
 
-    func loopJSON() -> String {
+    private func buildLoopJSONLocked() -> String {
         lock.lock()
         defer { lock.unlock() }
 
@@ -72,13 +107,18 @@ final class PebbleDataBridge {
         return "{\"iob\":\(iobStr),\"cob\":\(cobStr),\"lastLoopTime\":\(lastLoopStr),\"glucoseHistory\":\(historyStr)}"
     }
 
+    private func shouldFallbackToCachedCGM(_ json: String) -> Bool {
+        json.contains("\"glucose\":null") || json.contains("\"glucose\":\"--\"") || json.contains("\"glucose\":\"\"")
+    }
+
     func pumpJSON() -> String {
         return "{\"reservoir\":null,\"battery\":null}"
     }
 
     func allDataJSON() -> String {
         let timestamp = isoFormatter.string(from: Date())
-        return "{\"timestamp\":\"\(timestamp)\",\"cgm\":\(cgmJSON()),\"loop\":\(loopJSON()),\"pump\":\(pumpJSON()),\"maxBolus\":\(maxBolus),\"maxCarbs\":\(maxCarbs)}"
+        let ble = isBLEPushActive ? "true" : "false"
+        return "{\"timestamp\":\"\(timestamp)\",\"cgm\":\(cgmJSON()),\"loop\":\(loopJSON()),\"pump\":\(pumpJSON()),\"maxBolus\":\(maxBolus),\"maxCarbs\":\(maxCarbs),\"blePushActive\":\(ble)}"
     }
 
     // MARK: - Helpers
@@ -90,7 +130,13 @@ final class PebbleDataBridge {
 
     private func formatGlucoseHistory() -> String {
         guard !glucoseValues.isEmpty else { return "[]" }
-        let items = glucoseValues.map { "\(Int($0.glucose))" }
+        let isMmol = units.contains("mmol")
+        let items = glucoseValues.map { pt -> String in
+            if isMmol {
+                return String(format: "%.1f", pt.glucose)
+            }
+            return "\(Int(pt.glucose.rounded()))"
+        }
         return "[\(items.joined(separator: ","))]"
     }
 
