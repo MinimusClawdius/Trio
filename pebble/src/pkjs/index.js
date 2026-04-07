@@ -92,21 +92,32 @@ function fetchTrio(callback) {
     });
 }
 
-/** True if Trio reported mmol/L (watch protocol uses mg/dL ints for glucose + graph). */
-function trioCgmUsesMmol(units) {
-    if (units == null) return false;
-    return String(units).toLowerCase().indexOf('mmol') >= 0;
-}
-
 function trioParseGlucoseNumber(raw) {
     if (raw == null || raw === '') return NaN;
     if (typeof raw === 'number') return raw;
     return parseFloat(String(raw).replace(',', '.'));
 }
 
+/** Prefer cgm.units; if missing, infer mmol vs mg/dL from magnitude (Trio mmol ~2–30). */
+function trioInferSourceIsMmol(unitsStr, glucoseRaw, historyArr) {
+    var u = String(unitsStr || '').toLowerCase();
+    if (u.indexOf('mmol') >= 0) return true;
+    if (u.indexOf('mg') >= 0 && u.indexOf('dl') >= 0) return false;
+    var g = trioParseGlucoseNumber(glucoseRaw);
+    if (!isNaN(g) && g > 0) {
+        if (g < 35) return true;
+        if (g >= 40) return false;
+    }
+    if (historyArr && historyArr.length > 0) {
+        var v = trioParseGlucoseNumber(historyArr[0]);
+        if (!isNaN(v) && v > 0 && v < 35) return true;
+        if (!isNaN(v) && v >= 40) return false;
+    }
+    return false;
+}
+
 /**
  * Trio /api/all may send mmol as "5.4" and history as [5.2, 5.4, ...].
- * parseInt("5.4") === 5 was wrongly treated as mg/dL → false urgent-low vibes + flat graph.
  * Always send KEY_GLUCOSE and graph points as mg/dL integers.
  * KEY_UNITS (watch display) is set from Pebble settings (displayMmol), not from Trio's API units.
  */
@@ -114,8 +125,8 @@ function normalizeTrio(data) {
     var cgm = data.cgm || {};
     var loop = data.loop || {};
     var blePush = data.blePushActive === true || data.blePushActive === 'true';
-    var units = cgm.units || 'mgdL';
-    var isMmol = trioCgmUsesMmol(units);
+    var histIn = loop.glucoseHistory || [];
+    var isMmol = trioInferSourceIsMmol(cgm.units, cgm.glucose, histIn);
 
     var gNum = trioParseGlucoseNumber(cgm.glucose);
     var glucoseMgdl = 0;
@@ -123,7 +134,6 @@ function normalizeTrio(data) {
         glucoseMgdl = isMmol ? Math.round(gNum * 18.0) : Math.round(gNum);
     }
 
-    var histIn = loop.glucoseHistory || [];
     var historyMgdl = [];
     for (var i = 0; i < histIn.length; i++) {
         var v = trioParseGlucoseNumber(histIn[i]);
@@ -359,8 +369,9 @@ function sendToWatch(data) {
 
     msg[K.UNITS] = displayUnitsAppMessageKey();
 
-    if (data.glucose != null && data.glucose !== '' && !isNaN(data.glucose)) {
-        msg[K.GLUCOSE] = data.glucose;
+    var gWire = Math.round(Number(data.glucose) || 0);
+    if (gWire > 0) {
+        msg[K.GLUCOSE] = gWire;
     }
     if (data.trend) msg[K.TREND] = data.trend.substring(0, 7);
     if (data.delta) msg[K.DELTA] = data.delta.substring(0, 15);
