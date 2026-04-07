@@ -50,8 +50,9 @@ enum PebbleAppMessageKey: Int, CaseIterable {
     case configCompSlot1 = 38
     case configCompSlot2 = 39
     case configCompSlot3 = 40
+    case configClock24h = 41
 
-    // Last key = 40. Must match `trio-pebble/package.json` messageKeys and `trio_types.h` / `index.js` `K`.
+    // Last key = 41. Must match `trio-pebble/package.json` messageKeys and `trio_types.h` / `index.js` `K`.
 
     /// `NSNumber` suitable for use as an `NSDictionary` key in PebbleKit iOS messages.
     var nsKey: NSNumber { NSNumber(value: rawValue) }
