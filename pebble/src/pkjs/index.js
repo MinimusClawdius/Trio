@@ -128,6 +128,16 @@ function normalizeTrio(data) {
     var histIn = loop.glucoseHistory || [];
     var isMmol = trioInferSourceIsMmol(cgm.units, cgm.glucose, histIn);
 
+    var pump = data.pump || {};
+    var reservoir = 0;
+    var pumpBattery = 0;
+    if (pump.reservoir != null && pump.reservoir !== '') {
+        reservoir = Math.round(Number(pump.reservoir));
+    }
+    if (pump.battery != null && pump.battery !== '') {
+        pumpBattery = Math.round(Number(pump.battery));
+    }
+
     var gNum = trioParseGlucoseNumber(cgm.glucose);
     var glucoseMgdl = 0;
     if (!isNaN(gNum) && gNum > 0) {
@@ -151,9 +161,9 @@ function normalizeTrio(data) {
         cob: loop.cob || '',
         lastLoop: loop.lastLoopTime || '',
         history: historyMgdl,
-        pumpStatus: '',
-        reservoir: 0,
-        pumpBattery: 0,
+        pumpStatus: typeof pump.status === 'string' ? pump.status : '',
+        reservoir: reservoir,
+        pumpBattery: pumpBattery,
         sensorAge: '',
         blePushActive: blePush
     };
@@ -524,7 +534,7 @@ Pebble.addEventListener('appmessage', function (e) {
     if (p[K.CMD_TYPE] !== undefined && p[K.CMD_AMOUNT] !== undefined) {
         sendCommand(p[K.CMD_TYPE], p[K.CMD_AMOUNT]);
     } else if (p[K.TAP_ACTION] !== undefined) {
-        if (p[K.TAP_ACTION] === 4) fetchData(); // TAP_ACTION_REFRESH
+        if (p[K.TAP_ACTION] === 4) fetchData();
     } else {
         fetchData();
     }

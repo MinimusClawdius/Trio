@@ -93,12 +93,14 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
     Tuple *config_changed = dict_find(iter, KEY_CONFIG_CHANGED);
     if (config_changed) {
         config_apply_message(iter);
+        s_state.config = *config_get();
         reload_face();
         return;
     }
 
     // Apply config keys that might come with data
     config_apply_message(iter);
+    s_state.config = *config_get();
 
     // CGM data
     Tuple *t;
@@ -215,10 +217,10 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
     complications_update_battery();
     complications_update_health();
 
-    // Request data every minute
+    /* Do not use AppMessage key 0 (KEY_GLUCOSE) for poll pings */
     DictionaryIterator *iter;
     if (app_message_outbox_begin(&iter) == APP_MSG_OK) {
-        dict_write_uint8(iter, 0, 0);
+        dict_write_uint8(iter, KEY_TAP_ACTION, TAP_ACTION_REFRESH);
         app_message_outbox_send();
     }
 }
