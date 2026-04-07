@@ -1,6 +1,10 @@
-# Trio Pebble v2.0
+# Trio Pebble v2.0.2
 
 A premium, configurable CGM watchface for Pebble smartwatches. Supports **Trio**, **Dexcom Share**, and **Nightscout** data sources.
+
+## Trio + mmol/L (HTTP data source)
+
+Trio’s `/api/cgm` reports glucose as a **string** in the user’s units (`"5.4"` for mmol/L, `"97"` for mg/dL). The watch **always** uses **mg/dL integers** internally for AppMessage keys, the **graph** (40–400 scale), and **alert thresholds** (defaults 180 / 70 / 55 mg/dL). PebbleKit JS converts mmol → mg/dL before sending; the C side formats the main glucose text back to mmol when `KEY_UNITS` indicates mmol.
 
 ## Technology (not Alloy)
 

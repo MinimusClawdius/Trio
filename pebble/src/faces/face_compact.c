@@ -5,12 +5,13 @@
 // Graph fills remaining space with clear threshold lines.
 
 #include "face_compact.h"
+#include "../modules/config.h"
 #include "../modules/graph.h"
 #include "../modules/complications.h"
 
 static TextLayer *s_glucose, *s_trend, *s_delta, *s_age, *s_time;
 static Layer *s_graph_layer, *s_comp_layer;
-static char s_time_buf[8], s_glucose_buf[16], s_age_buf[16];
+static char s_time_buf[8], s_glucose_buf[20], s_age_buf[16];
 
 static void graph_proc(Layer *layer, GContext *ctx) {
     graph_draw(layer, ctx, config_get());
@@ -77,8 +78,11 @@ void face_compact_update(AppState *state) {
     strftime(s_time_buf, sizeof(s_time_buf), "%H:%M", t);
     text_layer_set_text(s_time, s_time_buf);
 
+    text_layer_set_font(s_glucose, config_get()->is_mmol
+                        ? FONT_KEY_GOTHIC_28_BOLD
+                        : FONT_KEY_BITHAM_34_MEDIUM_NUMBERS);
     if (state->cgm.glucose > 0) {
-        snprintf(s_glucose_buf, sizeof(s_glucose_buf), "%d", state->cgm.glucose);
+        format_glucose_display_string(s_glucose_buf, sizeof(s_glucose_buf), state->cgm.glucose);
     } else {
         snprintf(s_glucose_buf, sizeof(s_glucose_buf), "--");
     }

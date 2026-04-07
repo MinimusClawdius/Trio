@@ -4,12 +4,13 @@
 // happens to show glucose. Subtle and non-medical looking.
 
 #include "face_minimal.h"
+#include "../modules/config.h"
 #include "../modules/graph.h"
 #include "../modules/complications.h"
 
 static TextLayer *s_time, *s_glucose, *s_trend, *s_delta, *s_weather;
 static Layer *s_sparkline_layer;
-static char s_time_buf[8], s_glucose_buf[16], s_weather_buf[20];
+static char s_time_buf[8], s_glucose_buf[20], s_weather_buf[20];
 
 static void sparkline_proc(Layer *layer, GContext *ctx) {
     // Draw a thin sparkline (last 12 points only)
@@ -71,7 +72,7 @@ void face_minimal_update(AppState *state) {
     text_layer_set_text(s_time, s_time_buf);
 
     if (state->cgm.glucose > 0) {
-        snprintf(s_glucose_buf, sizeof(s_glucose_buf), "%d", state->cgm.glucose);
+        format_glucose_display_string(s_glucose_buf, sizeof(s_glucose_buf), state->cgm.glucose);
     } else {
         snprintf(s_glucose_buf, sizeof(s_glucose_buf), "--");
     }

@@ -4,13 +4,14 @@
 // Center: Compact graph, Bottom: IOB/COB/Loop/Pump + complications
 
 #include "face_dashboard.h"
+#include "../modules/config.h"
 #include "../modules/graph.h"
 #include "../modules/complications.h"
 
 static TextLayer *s_glucose, *s_trend, *s_delta, *s_time, *s_date;
 static TextLayer *s_iob, *s_cob, *s_loop, *s_pump;
 static Layer *s_graph_layer, *s_comp_layer, *s_divider_layer;
-static char s_time_buf[8], s_date_buf[16], s_glucose_buf[16];
+static char s_time_buf[8], s_date_buf[16], s_glucose_buf[20];
 static char s_pump_buf[32];
 
 static void graph_proc(Layer *layer, GContext *ctx) {
@@ -118,10 +119,14 @@ void face_dashboard_update(AppState *state) {
     text_layer_set_text(s_time, s_time_buf);
     text_layer_set_text(s_date, s_date_buf);
 
-    snprintf(s_glucose_buf, sizeof(s_glucose_buf), "%s",
-             state->cgm.glucose > 0 ? "" : "--");
-    if (state->cgm.glucose > 0)
-        snprintf(s_glucose_buf, sizeof(s_glucose_buf), "%d", state->cgm.glucose);
+    text_layer_set_font(s_glucose, config_get()->is_mmol
+                        ? FONT_KEY_GOTHIC_28_BOLD
+                        : FONT_KEY_BITHAM_30_BLACK);
+    if (state->cgm.glucose > 0) {
+        format_glucose_display_string(s_glucose_buf, sizeof(s_glucose_buf), state->cgm.glucose);
+    } else {
+        snprintf(s_glucose_buf, sizeof(s_glucose_buf), "--");
+    }
     text_layer_set_text(s_glucose, s_glucose_buf);
 
 #ifdef PBL_COLOR

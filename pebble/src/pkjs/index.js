@@ -82,20 +82,55 @@ function fetchTrio(callback) {
     });
 }
 
+/** True if Trio reported mmol/L (watch protocol uses mg/dL ints for glucose + graph). */
+function trioCgmUsesMmol(units) {
+    if (units == null) return false;
+    return String(units).toLowerCase().indexOf('mmol') >= 0;
+}
+
+function trioParseGlucoseNumber(raw) {
+    if (raw == null || raw === '') return NaN;
+    if (typeof raw === 'number') return raw;
+    return parseFloat(String(raw).replace(',', '.'));
+}
+
+/**
+ * Trio /api/all may send mmol as "5.4" and history as [5.2, 5.4, ...].
+ * parseInt("5.4") === 5 was wrongly treated as mg/dL → false urgent-low vibes + flat graph.
+ * Always send KEY_GLUCOSE and graph points as mg/dL integers; KEY_UNITS still reflects user units.
+ */
 function normalizeTrio(data) {
     var cgm = data.cgm || {};
     var loop = data.loop || {};
     var blePush = data.blePushActive === true || data.blePushActive === 'true';
+    var units = cgm.units || 'mgdL';
+    var isMmol = trioCgmUsesMmol(units);
+
+    var gNum = trioParseGlucoseNumber(cgm.glucose);
+    var glucoseMgdl = 0;
+    if (!isNaN(gNum) && gNum > 0) {
+        glucoseMgdl = isMmol ? Math.round(gNum * 18.0) : Math.round(gNum);
+    }
+
+    var histIn = loop.glucoseHistory || [];
+    var historyMgdl = [];
+    for (var i = 0; i < histIn.length; i++) {
+        var v = trioParseGlucoseNumber(histIn[i]);
+        if (isNaN(v) || v <= 0) continue;
+        var mg = isMmol ? Math.round(v * 18.0) : Math.round(v);
+        if (mg > 0 && mg <= 65535) historyMgdl.push(mg);
+    }
+
     return {
-        glucose: parseInt(cgm.glucose, 10) || 0,
+        glucose: glucoseMgdl,
         trend: cgm.trend || '--',
         delta: cgm.delta || '',
         isStale: cgm.isStale || false,
-        units: cgm.units || 'mgdL',
+        units: units,
         iob: loop.iob || '',
         cob: loop.cob || '',
         lastLoop: loop.lastLoopTime || '',
-        history: loop.glucoseHistory || [],
+        history: historyMgdl,
         pumpStatus: '',
         reservoir: 0,
         pumpBattery: 0,
@@ -321,13 +356,15 @@ function sendToWatch(data) {
     if (data.reservoir) msg[K.RESERVOIR] = data.reservoir;
     if (data.pumpBattery) msg[K.PUMP_BATTERY] = data.pumpBattery;
 
-    // Graph data as packed uint16 LE bytes
+    // Graph data as packed uint16 LE bytes (mg/dL integers after normalizeTrio)
     var history = data.history || [];
     if (history.length > 0) {
         var count = Math.min(history.length, 48);
         var bytes = [];
         for (var i = 0; i < count; i++) {
-            var val = history[i] || 0;
+            var val = Math.round(Number(history[i]) || 0);
+            if (val < 0) val = 0;
+            if (val > 65535) val = 65535;
             bytes.push(val & 0xFF);
             bytes.push((val >> 8) & 0xFF);
         }

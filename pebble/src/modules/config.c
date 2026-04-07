@@ -1,4 +1,5 @@
 #include "config.h"
+#include <stdio.h>
 
 #define CONFIG_KEY 0x5472696F  // "Trio"
 
@@ -74,4 +75,19 @@ void config_apply_message(DictionaryIterator *iter) {
 
 TrioConfig *config_get(void) {
     return &s_config;
+}
+
+void format_glucose_display_string(char *buf, size_t buf_size, int16_t glucose_mgdl) {
+    if (!buf || buf_size == 0) return;
+    if (glucose_mgdl <= 0) {
+        buf[0] = '\0';
+        return;
+    }
+    TrioConfig *c = &s_config;
+    if (c->is_mmol) {
+        float mmol = glucose_mgdl / 18.0f;
+        snprintf(buf, buf_size, "%.1f", mmol);
+    } else {
+        snprintf(buf, buf_size, "%d", (int)glucose_mgdl);
+    }
 }
