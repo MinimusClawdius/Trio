@@ -1,10 +1,14 @@
-# Trio Pebble v2.0.2
+# Trio Pebble v2.0.3
 
 A premium, configurable CGM watchface for Pebble smartwatches. Supports **Trio**, **Dexcom Share**, and **Nightscout** data sources.
 
 ## Trio + mmol/L (HTTP data source)
 
-Trio’s `/api/cgm` reports glucose as a **string** in the user’s units (`"5.4"` for mmol/L, `"97"` for mg/dL). The watch **always** uses **mg/dL integers** internally for AppMessage keys, the **graph** (40–400 scale), and **alert thresholds** (defaults 180 / 70 / 55 mg/dL). PebbleKit JS converts mmol → mg/dL before sending; the C side formats the main glucose text back to mmol when `KEY_UNITS` indicates mmol.
+Trio’s `/api/cgm` reports glucose in the **app’s** units (`"5.4"` for mmol/L, `"97"` for mg/dL). The watch **always** uses **mg/dL integers** on the wire for **KEY_GLUCOSE**, **graph points**, and **alert thresholds** (defaults 180 / 70 / 55 mg/dL). PebbleKit JS reads Trio's `cgm.units` only to **convert** API values → mg/dL before sending.
+
+**Watch display** (mmol vs mg/dL text) is a separate setting: **Watchface → “Show glucose on watch as”** in the config page. `KEY_UNITS` must **not** be taken from Trio's JSON on every poll, or it overwrites your display choice and confuses formatting. When **BLE push** is active, JS still sends `KEY_UNITS` on each poll so that preference stays applied. iOS BLE payloads omit `KEY_UNITS` for the same reason.
+
+**iOS BLE graph:** history points are packed as mg/dL; when Trio runs in mmol/L, each graph sample is converted ×18 before packing (same as JS).
 
 ## Technology (not Alloy)
 

@@ -224,8 +224,8 @@ final class PebbleBLEBridge {
             msg[K.lastLoop.nsKey] = String(lastLoop.prefix(15))
         }
 
-        // Units hint
-        msg[K.units.nsKey] = state.units == .mmolL ? "mmol" : "mgdL"
+        // Do not send KEY_UNITS here — watch display (mmol vs mg/dL) comes from PebbleKit JS settings
+        // so it is not overwritten every BLE push with Trio's app units.
 
         // Stale flag — true if date > 15 min old
         let isStale = Date().timeIntervalSince(state.date) > 15 * 60
@@ -236,7 +236,14 @@ final class PebbleBLEBridge {
             let count = min(state.glucoseValues.count, 48)
             var bytes = Data(capacity: count * 2)
             for i in 0 ..< count {
-                let val = UInt16(clamping: Int(state.glucoseValues[i].glucose.rounded()))
+                let raw = state.glucoseValues[i].glucose
+                let mgdl: Int
+                if state.units == .mmolL {
+                    mgdl = Int((raw * 18.0).rounded())
+                } else {
+                    mgdl = Int(raw.rounded())
+                }
+                let val = UInt16(clamping: max(0, mgdl))
                 bytes.append(UInt8(val & 0xFF))
                 bytes.append(UInt8((val >> 8) & 0xFF))
             }

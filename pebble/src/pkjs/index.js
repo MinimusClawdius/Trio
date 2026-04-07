@@ -47,8 +47,18 @@ var settings = {
     alertLowEnabled: true,
     alertSnoozeMin: 15,
     weatherEnabled: true,
-    weatherUnits: 'f'     // 'f' or 'c'
+    weatherUnits: 'f',    // 'f' or 'c'
+    /** Watch display only. Trio JSON may stay mmol/L; conversion uses API units, not this. */
+    displayMmol: true
 };
+
+function watchDisplayUsesMmol() {
+    return settings.displayMmol !== false;
+}
+
+function displayUnitsAppMessageKey() {
+    return watchDisplayUsesMmol() ? 'mmol/L' : 'mg/dL';
+}
 
 function loadSettings() {
     try {
@@ -97,7 +107,8 @@ function trioParseGlucoseNumber(raw) {
 /**
  * Trio /api/all may send mmol as "5.4" and history as [5.2, 5.4, ...].
  * parseInt("5.4") === 5 was wrongly treated as mg/dL → false urgent-low vibes + flat graph.
- * Always send KEY_GLUCOSE and graph points as mg/dL integers; KEY_UNITS still reflects user units.
+ * Always send KEY_GLUCOSE and graph points as mg/dL integers.
+ * KEY_UNITS (watch display) is set from Pebble settings (displayMmol), not from Trio's API units.
  */
 function normalizeTrio(data) {
     var cgm = data.cgm || {};
@@ -126,7 +137,6 @@ function normalizeTrio(data) {
         trend: cgm.trend || '--',
         delta: cgm.delta || '',
         isStale: cgm.isStale || false,
-        units: units,
         iob: loop.iob || '',
         cob: loop.cob || '',
         lastLoop: loop.lastLoopTime || '',
@@ -138,6 +148,7 @@ function normalizeTrio(data) {
         blePushActive: blePush
     };
 }
+
 
 // ---------- Data Source: Nightscout ----------
 function fetchNightscout(callback) {
@@ -328,9 +339,15 @@ function fetchData() {
 
     fetcher(function (data) {
         if (data) {
-            // Trio + PebbleKit iOS BLE: phone already pushes AppMessages; avoid duplicate traffic.
+            // Trio + PebbleKit iOS BLE: phone pushes data; still send KEY_UNITS so display preference sticks.
             var skipSend = settings.dataSource === 0 && data.blePushActive === true;
-            if (!skipSend) sendToWatch(data);
+            if (!skipSend) {
+                sendToWatch(data);
+            } else {
+                var uonly = {};
+                uonly[K.UNITS] = displayUnitsAppMessageKey();
+                Pebble.sendAppMessage(uonly);
+            }
         }
         applyAdaptivePollingAfterFetch(data);
     });
@@ -340,6 +357,8 @@ function fetchData() {
 function sendToWatch(data) {
     var msg = {};
 
+    msg[K.UNITS] = displayUnitsAppMessageKey();
+
     if (data.glucose != null && data.glucose !== '' && !isNaN(data.glucose)) {
         msg[K.GLUCOSE] = data.glucose;
     }
@@ -348,7 +367,6 @@ function sendToWatch(data) {
     if (data.iob) msg[K.IOB] = data.iob.substring(0, 15);
     if (data.cob) msg[K.COB] = data.cob.substring(0, 15);
     if (data.lastLoop) msg[K.LAST_LOOP] = data.lastLoop.substring(0, 15);
-    if (data.units) msg[K.UNITS] = data.units;
     if (data.pumpStatus) msg[K.PUMP_STATUS] = data.pumpStatus.substring(0, 15);
     if (data.sensorAge) msg[K.SENSOR_AGE] = data.sensorAge.substring(0, 15);
 
@@ -478,6 +496,7 @@ Pebble.addEventListener('webviewclosed', function (e) {
             msg[K.CONFIG_ALERT_LOW_ENABLED] = settings.alertLowEnabled ? 1 : 0;
             msg[K.CONFIG_ALERT_SNOOZE_MIN] = settings.alertSnoozeMin;
             msg[K.CONFIG_COLOR_SCHEME] = settings.colorScheme;
+            msg[K.UNITS] = displayUnitsAppMessageKey();
             Pebble.sendAppMessage(msg);
 
             // Re-fetch with new source
@@ -512,6 +531,7 @@ Pebble.addEventListener('ready', function () {
     msg[K.CONFIG_HIGH_THRESHOLD] = settings.highThreshold;
     msg[K.CONFIG_LOW_THRESHOLD] = settings.lowThreshold;
     msg[K.CONFIG_COLOR_SCHEME] = settings.colorScheme;
+    msg[K.UNITS] = displayUnitsAppMessageKey();
     Pebble.sendAppMessage(msg);
 
     fetchData();

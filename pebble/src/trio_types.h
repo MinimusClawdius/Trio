@@ -5,7 +5,7 @@
 // Trio Pebble - Shared Types & Constants
 // ============================================================
 
-#define APP_VERSION "2.0.2"
+#define APP_VERSION "2.0.3"
 #define MAX_GRAPH_POINTS 48
 #define MAX_PREDICTIONS 24
 
@@ -112,7 +112,7 @@ typedef struct {
     bool alert_low_enabled;
     uint8_t alert_snooze_min;
     bool show_complications;
-    bool is_mmol;               // derived from KEY_UNITS
+    bool is_mmol;               // watch display: derived from KEY_UNITS (Pebble config), not Trio API
 } TrioConfig;
 
 // ---------- CGM State ----------
@@ -163,6 +163,7 @@ typedef struct {
     bool low_active;
     bool urgent_low_active;
     time_t last_alert_time;
+    time_t last_urgent_alert_time;
     time_t snooze_until;
 } AlertState;
 
