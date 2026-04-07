@@ -5,10 +5,11 @@
 
 #include "face_minimal.h"
 #include "../modules/graph.h"
+#include "../modules/complications.h"
 
-static TextLayer *s_time, *s_glucose, *s_trend, *s_delta;
+static TextLayer *s_time, *s_glucose, *s_trend, *s_delta, *s_weather;
 static Layer *s_sparkline_layer;
-static char s_time_buf[8], s_glucose_buf[16];
+static char s_time_buf[8], s_glucose_buf[16], s_weather_buf[20];
 
 static void sparkline_proc(Layer *layer, GContext *ctx) {
     // Draw a thin sparkline (last 12 points only)
@@ -44,6 +45,10 @@ void face_minimal_load(Window *window, Layer *root, GRect bounds) {
     s_trend = make_text(root, GRect(0, h / 2 + 10, w / 2, 20), FONT_KEY_GOTHIC_18, GTextAlignmentRight, fg2);
     s_delta = make_text(root, GRect(w / 2, h / 2 + 10, w / 2, 20), FONT_KEY_GOTHIC_18, GTextAlignmentLeft, fg2);
 
+    // Weather above sparkline (Diorite / all platforms)
+    s_weather = make_text(root, GRect(0, h - 52, w, 16), FONT_KEY_GOTHIC_14, GTextAlignmentCenter, fg2);
+    text_layer_set_text(s_weather, "");
+
     // Thin sparkline at bottom
     s_sparkline_layer = layer_create(GRect(10, h - 30, w - 20, 24));
     layer_set_update_proc(s_sparkline_layer, sparkline_proc);
@@ -55,6 +60,7 @@ void face_minimal_unload(void) {
     text_layer_destroy(s_glucose);
     text_layer_destroy(s_trend);
     text_layer_destroy(s_delta);
+    text_layer_destroy(s_weather);
     layer_destroy(s_sparkline_layer);
 }
 
@@ -84,6 +90,13 @@ void face_minimal_update(AppState *state) {
 
     text_layer_set_text(s_trend, state->cgm.trend_str);
     text_layer_set_text(s_delta, state->cgm.delta_str);
+
+    if (complications_weather_is_valid(state)) {
+        snprintf(s_weather_buf, sizeof(s_weather_buf), "%d°", (int)state->comp.weather_temp);
+        text_layer_set_text(s_weather, s_weather_buf);
+    } else {
+        text_layer_set_text(s_weather, "");
+    }
 
     layer_mark_dirty(s_sparkline_layer);
 }

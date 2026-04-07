@@ -2,6 +2,10 @@
 
 A premium, configurable CGM watchface for Pebble smartwatches. Supports **Trio**, **Dexcom Share**, and **Nightscout** data sources.
 
+## Technology (not Alloy)
+
+This project uses the **classic Pebble SDK 3** watch code in **C** plus **PebbleKit JavaScript** (`pkjs/index.js`). It is **not** built with [Alloy](https://developer.repebble.com/guides/alloy/) (JavaScript on-watch via Moddable). Alloy today targets **Emery** and **Gabbro**; this watchface is built for **aplite, basalt, chalk, diorite, emery** including **Pebble 2 (Diorite)**.
+
 ## Features
 
 ### Multiple Watchface Layouts
@@ -10,10 +14,10 @@ Switch between 5 distinct face designs via buttons or the config page:
 | Face | Description |
 |------|-------------|
 | **Classic** | Glucose + graph + IOB/COB/loop + complications bar |
-| **Graph Focus** | Full-screen graph with overlaid glucose and minimal text |
-| **Compact** | T1000-inspired: large glucose + trend, reading age, full graph |
+| **Graph Focus** | Large graph + overlaid glucose; bottom complications (battery, steps, HR, **weather**) |
+| **Compact** | T1000-inspired layout + bottom complications bar (**weather** on Diorite) |
 | **Dashboard** | Information-dense quadrant layout with date, pump, sensor data |
-| **Minimal** | Elegant time-forward design with sparkline - for everyday wear |
+| **Minimal** | Time-forward design, sparkline, and a **weather** line when data is available |
 
 ### Data Sources (Configurable)
 - **Trio** - Polls local HTTP API on `127.0.0.1:8080` (requires Trio iOS app with Pebble integration enabled)
@@ -40,7 +44,7 @@ Switch between 5 distinct face designs via buttons or the config page:
 - Watch battery percentage (with charging indicator)
 - Steps (from Pebble Health)
 - Heart rate (from Pebble Health, when available)
-- Weather temperature (via Open-Meteo API, no API key needed)
+- Weather temperature (via Open-Meteo API, no API key needed). On **monochrome** watches (e.g. **Diorite / Pebble 2**), the complications bar uses **black text on a light background** and **white on dark** so weather stays visible; **0°C** still shows when the phone sends a weather **icon** key.
 
 ### Color Schemes
 - **Dark** - Black background, green/red/orange glucose colors

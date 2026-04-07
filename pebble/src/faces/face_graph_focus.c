@@ -8,11 +8,16 @@
 
 static TextLayer *s_glucose, *s_trend, *s_delta, *s_time;
 static TextLayer *s_iob_cob;
-static Layer *s_graph_layer;
+static Layer *s_graph_layer, *s_comp_layer;
 static char s_time_buf[8], s_glucose_buf[16], s_iob_cob_buf[32];
 
 static void graph_proc(Layer *layer, GContext *ctx) {
     graph_draw(layer, ctx, config_get());
+}
+
+static void comp_proc(Layer *layer, GContext *ctx) {
+    GRect bounds = layer_get_bounds(layer);
+    complications_draw_bar(ctx, bounds, app_state_get(), config_get());
 }
 
 static TextLayer *make_text(Layer *root, GRect frame, const char *font_key, GTextAlignment align, GColor fg) {
@@ -31,9 +36,15 @@ void face_graph_focus_load(Window *window, Layer *root, GRect bounds) {
     int h = bounds.size.h;
     bool light = config_get()->color_scheme == COLOR_SCHEME_LIGHT;
     GColor fg = light ? GColorBlack : GColorWhite;
+#ifdef PBL_COLOR
+    GColor fg_muted = light ? GColorDarkGray : GColorLightGray;
+#else
+    GColor fg_muted = light ? GColorBlack : GColorWhite;
+#endif
+    int comp_h = 18;
 
-    // Full-height graph behind everything
-    s_graph_layer = layer_create(GRect(0, 0, w, h));
+    // Graph behind UI; reserve bottom row for complications (weather on Diorite, etc.)
+    s_graph_layer = layer_create(GRect(0, 0, w, h - comp_h));
     layer_set_update_proc(s_graph_layer, graph_proc);
     layer_add_child(root, s_graph_layer);
 
@@ -45,13 +56,17 @@ void face_graph_focus_load(Window *window, Layer *root, GRect bounds) {
     s_trend = make_text(root, GRect(w / 2, 6, 40, 24), FONT_KEY_GOTHIC_24_BOLD, GTextAlignmentLeft, fg);
 
     // Delta below glucose
-    s_delta = make_text(root, GRect(4, 34, w / 3, 16), FONT_KEY_GOTHIC_14, GTextAlignmentLeft, GColorLightGray);
+    s_delta = make_text(root, GRect(4, 34, w / 3, 16), FONT_KEY_GOTHIC_14, GTextAlignmentLeft, fg_muted);
 
     // Time - top right
-    s_time = make_text(root, GRect(w - 52, 2, 48, 20), FONT_KEY_GOTHIC_18, GTextAlignmentRight, GColorLightGray);
+    s_time = make_text(root, GRect(w - 52, 2, 48, 20), FONT_KEY_GOTHIC_18, GTextAlignmentRight, fg_muted);
 
-    // IOB + COB combined - bottom left
-    s_iob_cob = make_text(root, GRect(4, h - 18, w - 4, 16), FONT_KEY_GOTHIC_14, GTextAlignmentLeft, GColorLightGray);
+    // IOB + COB — above complications strip
+    s_iob_cob = make_text(root, GRect(4, h - comp_h - 18, w - 4, 16), FONT_KEY_GOTHIC_14, GTextAlignmentLeft, fg_muted);
+
+    s_comp_layer = layer_create(GRect(0, h - comp_h, w, comp_h));
+    layer_set_update_proc(s_comp_layer, comp_proc);
+    layer_add_child(root, s_comp_layer);
 }
 
 void face_graph_focus_unload(void) {
@@ -61,6 +76,7 @@ void face_graph_focus_unload(void) {
     text_layer_destroy(s_time);
     text_layer_destroy(s_iob_cob);
     layer_destroy(s_graph_layer);
+    layer_destroy(s_comp_layer);
 }
 
 void face_graph_focus_update(AppState *state) {
@@ -95,4 +111,5 @@ void face_graph_focus_update(AppState *state) {
     text_layer_set_text(s_iob_cob, s_iob_cob_buf);
 
     layer_mark_dirty(s_graph_layer);
+    layer_mark_dirty(s_comp_layer);
 }

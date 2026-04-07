@@ -6,13 +6,19 @@
 
 #include "face_compact.h"
 #include "../modules/graph.h"
+#include "../modules/complications.h"
 
 static TextLayer *s_glucose, *s_trend, *s_delta, *s_age, *s_time;
-static Layer *s_graph_layer;
+static Layer *s_graph_layer, *s_comp_layer;
 static char s_time_buf[8], s_glucose_buf[16], s_age_buf[16];
 
 static void graph_proc(Layer *layer, GContext *ctx) {
     graph_draw(layer, ctx, config_get());
+}
+
+static void comp_proc(Layer *layer, GContext *ctx) {
+    GRect bounds = layer_get_bounds(layer);
+    complications_draw_bar(ctx, bounds, app_state_get(), config_get());
 }
 
 static TextLayer *make_text(Layer *root, GRect frame, const char *font_key, GTextAlignment align, GColor fg) {
@@ -43,11 +49,16 @@ void face_compact_load(Window *window, Layer *root, GRect bounds) {
     s_age = make_text(root, GRect(w / 3, 36, w / 3, 16), FONT_KEY_GOTHIC_14, GTextAlignmentCenter, fg2);
     s_time = make_text(root, GRect(2 * w / 3, 36, w / 3, 16), FONT_KEY_GOTHIC_14_BOLD, GTextAlignmentCenter, fg2);
 
-    // Graph - fill the rest
+    // Graph — leave room for complications (weather, etc.) on monochrome / all platforms
     int graph_top = 54;
-    s_graph_layer = layer_create(GRect(2, graph_top, w - 4, h - graph_top - 2));
+    int comp_h = 18;
+    s_graph_layer = layer_create(GRect(2, graph_top, w - 4, h - graph_top - comp_h - 2));
     layer_set_update_proc(s_graph_layer, graph_proc);
     layer_add_child(root, s_graph_layer);
+
+    s_comp_layer = layer_create(GRect(0, h - comp_h, w, comp_h));
+    layer_set_update_proc(s_comp_layer, comp_proc);
+    layer_add_child(root, s_comp_layer);
 }
 
 void face_compact_unload(void) {
@@ -57,6 +68,7 @@ void face_compact_unload(void) {
     text_layer_destroy(s_age);
     text_layer_destroy(s_time);
     layer_destroy(s_graph_layer);
+    layer_destroy(s_comp_layer);
 }
 
 void face_compact_update(AppState *state) {
@@ -96,4 +108,5 @@ void face_compact_update(AppState *state) {
     text_layer_set_text(s_age, s_age_buf);
 
     layer_mark_dirty(s_graph_layer);
+    layer_mark_dirty(s_comp_layer);
 }

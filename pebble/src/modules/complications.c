@@ -1,5 +1,11 @@
 #include "complications.h"
 
+bool complications_weather_is_valid(const AppState *state) {
+    if (!state) return false;
+    if (state->comp.weather_icon[0] != '\0') return true;
+    return state->comp.weather_temp != 0;
+}
+
 void complications_init(void) {
     // Register battery state handler
     complications_update_battery();
@@ -57,7 +63,8 @@ void complications_draw_bar(GContext *ctx, GRect area, AppState *state, TrioConf
 #ifdef PBL_COLOR
     GColor fg = (config->color_scheme == COLOR_SCHEME_LIGHT) ? GColorDarkGray : GColorLightGray;
 #else
-    GColor fg = GColorWhite;
+    /* Diorite / aplite: match window background from main.c (light=white, dark=black). */
+    GColor fg = (config->color_scheme == COLOR_SCHEME_LIGHT) ? GColorBlack : GColorWhite;
 #endif
 
     graphics_context_set_text_color(ctx, fg);
@@ -89,9 +96,9 @@ void complications_draw_bar(GContext *ctx, GRect area, AppState *state, TrioConf
                            GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     }
 
-    // Weather
-    if (state->comp.weather_temp != 0) {
-        snprintf(buf, sizeof(buf), "%d°", state->comp.weather_temp);
+    // Weather (valid if non-zero temp or pkjs sent an icon — supports 0°C / rounded 32°F)
+    if (complications_weather_is_valid(state)) {
+        snprintf(buf, sizeof(buf), "%d°", (int)state->comp.weather_temp);
         graphics_draw_text(ctx, buf, font, GRect(x + section_w * 3, y, section_w - 2, 16),
                            GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
     }
