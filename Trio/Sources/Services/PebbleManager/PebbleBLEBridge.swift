@@ -54,7 +54,8 @@ final class PebbleBLEBridge {
 
     private var central: PBPebbleCentral?
     private var connectedWatch: PBWatch?
-    private var receiveHandler: id?
+    /// Opaque handle returned by `appMessagesAddReceiveUpdateHandler:` (PebbleKit `id`).
+    private var receiveHandlerHandle: Any?
 
     func start() {
         guard !isRunning else { return }
@@ -62,6 +63,8 @@ final class PebbleBLEBridge {
             debug(.service, "PebbleBLE: invalid watchface UUID")
             return
         }
+
+        UIDevice.current.isBatteryMonitoringEnabled = true
 
         let c = PBPebbleCentral.default()
         c.appUUID = uuid as UUID
@@ -80,10 +83,12 @@ final class PebbleBLEBridge {
     func stop() {
         guard isRunning else { return }
 
-        if let watch = connectedWatch, let handler = receiveHandler {
-            watch.appMessagesRemoveUpdateHandler(handler)
+        if let watch = connectedWatch, let handle = receiveHandlerHandle {
+            watch.appMessagesRemoveUpdateHandler(handle)
         }
+        receiveHandlerHandle = nil
         connectedWatch = nil
+        lastPushedHash = nil
         central = nil
         isConnected = false
         isRunning = false
@@ -118,7 +123,7 @@ final class PebbleBLEBridge {
         connectedWatch = watch
         isConnected = true
 
-        receiveHandler = watch.appMessagesAddReceiveUpdateHandler { [weak self] _, update -> Bool in
+        receiveHandlerHandle = watch.appMessagesAddReceiveUpdateHandler { [weak self] _, update -> Bool in
             self?.handleIncoming(update)
             return true // auto-ACK
         }
@@ -131,8 +136,13 @@ final class PebbleBLEBridge {
     private func watchDidDisconnect(_ watch: PBWatch) {
         let name = watch.name ?? "Pebble"
         if connectedWatch?.isEqual(watch) == true {
+            if let handle = receiveHandlerHandle {
+                watch.appMessagesRemoveUpdateHandler(handle)
+                receiveHandlerHandle = nil
+            }
             connectedWatch = nil
             isConnected = false
+            lastPushedHash = nil
         }
         debug(.service, "PebbleBLE: disconnected from \(name)")
         delegate?.pebbleBLE(didDisconnect: name)

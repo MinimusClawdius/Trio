@@ -4,7 +4,12 @@
 // ============================================================
 
 var POLL_INTERVAL_MS = 30000;
+/// When Trio iOS pushes CGM/loop over PebbleKit BLE, JS polling is only a fallback (detect disconnect, non-BLE paths).
+var POLL_INTERVAL_BLE_ACTIVE_MS = 120000;
 var WEATHER_INTERVAL_MS = 1800000; // 30 min
+
+var activePollIntervalMs = POLL_INTERVAL_MS;
+var pollTimerId = null;
 
 // AppMessage keys (must match C enums)
 var K = {
@@ -80,6 +85,7 @@ function fetchTrio(callback) {
 function normalizeTrio(data) {
     var cgm = data.cgm || {};
     var loop = data.loop || {};
+    var blePush = data.blePushActive === true || data.blePushActive === 'true';
     return {
         glucose: parseInt(cgm.glucose, 10) || 0,
         trend: cgm.trend || '--',
@@ -93,7 +99,8 @@ function normalizeTrio(data) {
         pumpStatus: '',
         reservoir: 0,
         pumpBattery: 0,
-        sensorAge: ''
+        sensorAge: '',
+        blePushActive: blePush
     };
 }
 
@@ -259,6 +266,23 @@ function directionToArrow(direction) {
 }
 
 // ---------- Fetch Dispatcher ----------
+function desiredPollIntervalMs(data) {
+    if (settings.dataSource !== 0) return POLL_INTERVAL_MS;
+    if (data && data.blePushActive) return POLL_INTERVAL_BLE_ACTIVE_MS;
+    return POLL_INTERVAL_MS;
+}
+
+function applyAdaptivePollingAfterFetch(data) {
+    var next = desiredPollIntervalMs(data);
+    if (next === activePollIntervalMs && pollTimerId !== null) return;
+    activePollIntervalMs = next;
+    if (pollTimerId !== null) {
+        clearInterval(pollTimerId);
+        pollTimerId = null;
+    }
+    pollTimerId = setInterval(fetchData, activePollIntervalMs);
+}
+
 function fetchData() {
     var fetcher;
     switch (settings.dataSource) {
@@ -268,7 +292,12 @@ function fetchData() {
     }
 
     fetcher(function (data) {
-        if (data) sendToWatch(data);
+        if (data) {
+            // Trio + PebbleKit iOS BLE: phone already pushes AppMessages; avoid duplicate traffic.
+            var skipSend = settings.dataSource === 0 && data.blePushActive === true;
+            if (!skipSend) sendToWatch(data);
+        }
+        applyAdaptivePollingAfterFetch(data);
     });
 }
 
@@ -276,7 +305,9 @@ function fetchData() {
 function sendToWatch(data) {
     var msg = {};
 
-    if (data.glucose) msg[K.GLUCOSE] = data.glucose;
+    if (data.glucose != null && data.glucose !== '' && !isNaN(data.glucose)) {
+        msg[K.GLUCOSE] = data.glucose;
+    }
     if (data.trend) msg[K.TREND] = data.trend.substring(0, 7);
     if (data.delta) msg[K.DELTA] = data.delta.substring(0, 15);
     if (data.iob) msg[K.IOB] = data.iob.substring(0, 15);
@@ -448,7 +479,7 @@ Pebble.addEventListener('ready', function () {
 
     fetchData();
     fetchWeather();
-    setInterval(fetchData, POLL_INTERVAL_MS);
+    // First `fetchData` schedules `pollTimerId` via `applyAdaptivePollingAfterFetch`.
     setInterval(fetchWeather, WEATHER_INTERVAL_MS);
 });
 

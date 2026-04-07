@@ -45,7 +45,8 @@ enum PebbleAppMessageKey: Int, CaseIterable {
     case sensorAge = 33
     case configChanged = 34
     case tapAction = 35
-    case configWeatherEnabled = 36
+
+    // Last key = 35 (`KEY_TAP_ACTION`). Must match `pebble/package.json` messageKeys and `trio_types.h` / `index.js` `K`.
 
     /// `NSNumber` suitable for use as an `NSDictionary` key in PebbleKit iOS messages.
     var nsKey: NSNumber { NSNumber(value: rawValue) }
