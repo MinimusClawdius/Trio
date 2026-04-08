@@ -26,6 +26,8 @@ final class BasePebbleManager: PebbleManager, Injectable {
     private let bleBridge = PebbleBLEBridge()
     private var apiServer: PebbleLocalAPIServer?
 
+    @Injected() private var pebbleServiceManager: PebbleServiceManager!
+
     @Persisted(key: "BasePebbleManager.isEnabled") var isEnabled: Bool = false {
         didSet {
             if isEnabled { start() } else { stop() }
@@ -41,7 +43,31 @@ final class BasePebbleManager: PebbleManager, Injectable {
     init(resolver: Resolver) {
         injectServices(resolver)
         bleBridge.delegate = self
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(Self.pebbleIntegrationConfigurationDidChange),
+            name: .pebbleIntegrationConfigurationDidChange,
+            object: nil
+        )
+        applyServiceConfigurationIfNeeded()
         if isEnabled { start() }
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func pebbleIntegrationConfigurationDidChange() {
+        applyServiceConfigurationIfNeeded()
+    }
+
+    private func applyServiceConfigurationIfNeeded() {
+        (pebbleServiceManager as? BasePebbleServiceManager)?.applyConfiguration(to: self)
+    }
+
+    /// Port from legacy Watch Config when not overridden by `PebbleService`.
+    func resolvedLegacyPort() -> UInt16 {
+        port
     }
 
     func start() {
@@ -100,6 +126,7 @@ final class BasePebbleManager: PebbleManager, Injectable {
 
 extension BasePebbleManager: PebbleBLEBridgeDelegate {
     func pebbleBLE(didReceiveCommand type: Int, amount: Int) {
+        guard pebbleServiceManager.isPebbleDataDeliveryEnabled else { return }
         switch type {
         case 1: // bolus
             let units = Double(amount) / 10.0
@@ -122,4 +149,9 @@ extension BasePebbleManager: PebbleBLEBridgeDelegate {
     func pebbleBLE(didDisconnect watchName: String) {
         debug(.service, "Pebble: BLE disconnected from \(watchName) — falling back to HTTP")
     }
+}
+
+extension BasePebbleManager {
+    /// Matches `Persisted` key for the legacy Watch Config toggle when no `PebbleService` exists.
+    static let legacyEnabledUserDefaultsKey = "BasePebbleManager.isEnabled"
 }

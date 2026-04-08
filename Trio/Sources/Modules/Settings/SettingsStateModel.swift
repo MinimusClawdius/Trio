@@ -19,7 +19,9 @@ extension Settings {
         @Published var closedLoop = false
         @Published var debugOptions = false
         @Published var serviceUIType: ServiceUI.Type?
+        @Published var pebbleServiceUIType: ServiceUI.Type?
         @Published var setupTidepool = false
+        @Published var setupPebble = false
 
         private(set) var buildNumber = ""
         private(set) var versionNumber = ""
@@ -43,6 +45,7 @@ extension Settings {
             copyrightNotice = Bundle.main.infoDictionary?["NSHumanReadableCopyright"] as? String ?? ""
 
             serviceUIType = TidepoolService.self as? ServiceUI.Type
+            pebbleServiceUIType = PebbleService.self as? ServiceUI.Type
         }
 
         func logItems() -> [URL] {
@@ -97,7 +100,14 @@ extension Settings.StateModel: SettingsObserver {
 extension Settings.StateModel: ServiceOnboardingDelegate {
     func serviceOnboarding(didCreateService service: Service) {
         debug(.nightscout, "Service with identifier \(service.pluginIdentifier) created")
-        provider.tidepoolManager.addTidepoolService(service: service)
+        switch service.pluginIdentifier {
+        case TidepoolService.pluginIdentifier:
+            provider.tidepoolManager.addTidepoolService(service: service)
+        case PebbleService.pluginIdentifier:
+            provider.pebbleServiceManager.addPebbleService(service: service)
+        default:
+            break
+        }
     }
 
     func serviceOnboarding(didOnboardService service: Service) {
@@ -109,6 +119,7 @@ extension Settings.StateModel: ServiceOnboardingDelegate {
 extension Settings.StateModel: CompletionDelegate {
     func completionNotifyingDidComplete(_: CompletionNotifying) {
         setupTidepool = false
+        setupPebble = false
         provider.tidepoolManager.forceTidepoolDataUpload()
     }
 }

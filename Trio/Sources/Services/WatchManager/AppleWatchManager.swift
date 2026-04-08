@@ -29,6 +29,7 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
     @Injected() private var iobService: IOBService!
     @Injected() private var notificationsManager: UserNotificationsManager!
     @Injected() private var pebble: PebbleManager!
+    @Injected() private var pebbleServiceManager: PebbleServiceManager!
 
     private var units: GlucoseUnits = .mgdL
     private var glucoseColorScheme: GlucoseColorScheme = .staticColor
@@ -105,6 +106,7 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
 
         cmdMgr.executeBolus = { [weak self] amount in
             guard let self = self else { return }
+            guard self.pebbleServiceManager.isPebbleDataDeliveryEnabled else { return }
             Task {
                 await self.apsManager.enactBolus(amount: amount, isSMB: false) { _, _ in }
             }
@@ -112,9 +114,11 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
 
         cmdMgr.executeCarbs = { [weak self] grams, _ in
             guard let self = self else { return }
+            guard self.pebbleServiceManager.isPebbleDataDeliveryEnabled else { return }
             let context = CoreDataStack.shared.newTaskContext()
             Task {
                 await context.perform {
+                    // Same path as Apple Watch carbs: Core Data carb entries feed oref / Nightscout as treatments.
                     let carbEntry = CarbEntryStored(context: context)
                     carbEntry.id = UUID()
                     carbEntry.carbs = grams

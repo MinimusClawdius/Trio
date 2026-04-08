@@ -426,6 +426,12 @@
 		F7E8B10426E260CD5FA0002 /* PebbleBLEBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7E8B10426E260CD5FA0001 /* PebbleBLEBridge.swift */; };
 		F7E8B10426E260CD5FA0004 /* PebbleAppMessageKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7E8B10426E260CD5FA0003 /* PebbleAppMessageKeys.swift */; };
 		A1B201042E260CD5F03000C /* WatchConfigPebbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B201042E260CD5F03000B /* WatchConfigPebbleView.swift */; };
+		E5BB20100426FCD5F030B002 /* PebbleService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BB20100426FCD5F030B001 /* PebbleService.swift */; };
+		E5BB20100426FCD5F030B004 /* PebbleService+UI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BB20100426FCD5F030B003 /* PebbleService+UI.swift */; };
+		E5BB20100426FCD5F030B006 /* PebbleServiceFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BB20100426FCD5F030B005 /* PebbleServiceFormView.swift */; };
+		E5BB20100426FCD5F030B008 /* PebbleServiceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BB20100426FCD5F030B007 /* PebbleServiceManager.swift */; };
+		E5BB20100426FCD5F030B00A /* PebbleServiceConfigViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BB20100426FCD5F030B009 /* PebbleServiceConfigViews.swift */; };
+		E5BB20100426FCD5F030B00C /* PebbleServiceStartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BB20100426FCD5F030B00B /* PebbleServiceStartView.swift */; };
 		BDA25EE62D260D5E00035F34 /* WatchState.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDA25EE52D260D5800035F34 /* WatchState.swift */; };
 		BDA25EFD2D261C0000035F34 /* WatchState.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDA25EFC2D261BF200035F34 /* WatchState.swift */; };
 		BDA25F1C2D26BD0700035F34 /* TrendShape.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDA25F1B2D26BD0300035F34 /* TrendShape.swift */; };
@@ -1270,6 +1276,12 @@
 		F7E8B10426E260CD5FA0001 /* PebbleBLEBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleBLEBridge.swift; sourceTree = "<group>"; };
 		F7E8B10426E260CD5FA0003 /* PebbleAppMessageKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleAppMessageKeys.swift; sourceTree = "<group>"; };
 		A1B201042E260CD5F03000B /* WatchConfigPebbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchConfigPebbleView.swift; sourceTree = "<group>"; };
+		E5BB20100426FCD5F030B001 /* PebbleService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleService.swift; sourceTree = "<group>"; };
+		E5BB20100426FCD5F030B003 /* PebbleService+UI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PebbleService+UI.swift"; sourceTree = "<group>"; };
+		E5BB20100426FCD5F030B005 /* PebbleServiceFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleServiceFormView.swift; sourceTree = "<group>"; };
+		E5BB20100426FCD5F030B007 /* PebbleServiceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleServiceManager.swift; sourceTree = "<group>"; };
+		E5BB20100426FCD5F030B009 /* PebbleServiceConfigViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleServiceConfigViews.swift; sourceTree = "<group>"; };
+		E5BB20100426FCD5F030B00B /* PebbleServiceStartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleServiceStartView.swift; sourceTree = "<group>"; };
 		BDA25EE52D260D5800035F34 /* WatchState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchState.swift; sourceTree = "<group>"; };
 		BDA25EFC2D261BF200035F34 /* WatchState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchState.swift; sourceTree = "<group>"; };
 		BDA25F1B2D26BD0300035F34 /* TrendShape.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendShape.swift; sourceTree = "<group>"; };
@@ -2074,6 +2086,8 @@
 				3811DE3C25C9D4A100A708ED /* SettingsRootView.swift */,
 				CE1F6DE82BAF37C90064EB8D /* TidepoolConfigView.swift */,
 				65070A322BFDCB83006F213F /* TidepoolStartView.swift */,
+				E5BB20100426FCD5F030B009 /* PebbleServiceConfigViews.swift */,
+				E5BB20100426FCD5F030B00B /* PebbleServiceStartView.swift */,
 			);
 			path = View;
 			sourceTree = "<group>";
@@ -2099,6 +2113,7 @@
 				3811DEA525C9D88300A708ED /* UnlockManager */,
 				38E87406274F9AA500975559 /* UserNotifications */,
 				A1B201042E260CD5F03000D /* PebbleManager */,
+				E5BB20100426FCD5F030B00D /* PebbleService */,
 				38E8754D275556E100975559 /* WatchManager */,
 			);
 			path = Services;
@@ -2635,6 +2650,17 @@
 				F7E8B10426E260CD5FA0003 /* PebbleAppMessageKeys.swift */,
 			);
 			path = PebbleManager;
+			sourceTree = "<group>";
+		};
+		E5BB20100426FCD5F030B00D /* PebbleService */ = {
+			isa = PBXGroup;
+			children = (
+				E5BB20100426FCD5F030B001 /* PebbleService.swift */,
+				E5BB20100426FCD5F030B003 /* PebbleService+UI.swift */,
+				E5BB20100426FCD5F030B005 /* PebbleServiceFormView.swift */,
+				E5BB20100426FCD5F030B007 /* PebbleServiceManager.swift */,
+			);
+			path = PebbleService;
 			sourceTree = "<group>";
 		};
 		38E8754D275556E100975559 /* WatchManager */ = {
@@ -4373,6 +4399,8 @@
 				C29E268A2DADFD2A00F87E75 /* GlucoseDailyPercentileChart.swift in Sources */,
 				38A0363B25ECF07E00FCBB52 /* GlucoseStorage.swift in Sources */,
 				65070A332BFDCB83006F213F /* TidepoolStartView.swift in Sources */,
+				E5BB20100426FCD5F030B00A /* PebbleServiceConfigViews.swift in Sources */,
+				E5BB20100426FCD5F030B00C /* PebbleServiceStartView.swift in Sources */,
 				190EBCC629FF138000BA767D /* UserInterfaceSettingsProvider.swift in Sources */,
 				38E98A2725F52C9300C0CED0 /* CollectionIssueReporter.swift in Sources */,
 				E00EEC0427368630002FF094 /* SecurityAssembly.swift in Sources */,
@@ -4831,6 +4859,10 @@
 				F7E8B10426E260CD5FA0002 /* PebbleBLEBridge.swift in Sources */,
 				F7E8B10426E260CD5FA0004 /* PebbleAppMessageKeys.swift in Sources */,
 				A1B201042E260CD5F03000C /* WatchConfigPebbleView.swift in Sources */,
+				E5BB20100426FCD5F030B002 /* PebbleService.swift in Sources */,
+				E5BB20100426FCD5F030B004 /* PebbleService+UI.swift in Sources */,
+				E5BB20100426FCD5F030B006 /* PebbleServiceFormView.swift in Sources */,
+				E5BB20100426FCD5F030B008 /* PebbleServiceManager.swift in Sources */,
 				0437CE46C12535A56504EC19 /* SnoozeRootView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
