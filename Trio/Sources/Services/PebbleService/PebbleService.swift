@@ -2,8 +2,10 @@ import Combine
 import Foundation
 import LoopKit
 
-/// LoopKit `Service` for Pebble / Rebble watch integration (PebbleKit iOS + local HTTP bridge).
-/// State is persisted by `BasePebbleServiceManager`; `BasePebbleManager` applies `isEnabled` and HTTP port.
+/// LoopKit `Service` for Pebble / Rebble watch integration.
+///
+/// **Default path:** PebbleKit **JavaScript** in Rebble polls Trio's loopback HTTP API; commands use HTTP POST.
+/// **Optional:** native PebbleKit **iOS** BLE AppMessage push (`useNativeBLEPush`) — off by default.
 final class PebbleService: Service, ObservableObject {
     static let pluginIdentifier = "PebbleService"
 
@@ -18,12 +20,15 @@ final class PebbleService: Service, ObservableObject {
 
     @Published var isEnabled: Bool
     @Published var httpPort: UInt16
+    /// Native PebbleKit iOS BLE data push — experimental; **off** by default (JS + HTTP is primary).
+    @Published var useNativeBLEPush: Bool
     private(set) var isOnboarded: Bool
 
     init(hostIdentifier _: String, hostVersion _: String) {
         id = UUID().uuidString
         isEnabled = true
         httpPort = 8080
+        useNativeBLEPush = false
         isOnboarded = false
     }
 
@@ -38,6 +43,7 @@ final class PebbleService: Service, ObservableObject {
         } else {
             httpPort = 8080
         }
+        useNativeBLEPush = rawState["useNativeBLEPush"] as? Bool ?? false
         isOnboarded = rawState["isOnboarded"] as? Bool ?? false
     }
 
@@ -46,6 +52,7 @@ final class PebbleService: Service, ObservableObject {
             "id": id,
             "isEnabled": isEnabled,
             "httpPort": Int(httpPort),
+            "useNativeBLEPush": useNativeBLEPush,
             "isOnboarded": isOnboarded
         ]
     }

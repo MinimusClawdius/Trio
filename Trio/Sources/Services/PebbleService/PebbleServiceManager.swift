@@ -79,6 +79,8 @@ final class BasePebbleServiceManager: PebbleServiceManager, Injectable {
             }
             return manager.resolvedLegacyPort()
         }()
+        let nativeBle = (pebbleService?.isOnboarded == true) && (pebbleService?.useNativeBLEPush == true)
+        manager.setUseNativeBLEPush(nativeBle)
         if manager.getCurrentPort() != port {
             manager.setPort(port)
         }

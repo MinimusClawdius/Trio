@@ -10,6 +10,9 @@ import Glibc
 /// Lightweight HTTP server on 127.0.0.1 that exposes Trio data
 /// to the PebbleKit JS bridge running in the Rebble companion app.
 ///
+/// **Canonical snapshot:** `GET /api/all` and `GET /api/pebble/v1/snapshot` return the same
+/// versioned JSON (`pebbleProtocolVersion`, `stateRevision`, CGM/loop/pump, transport flags).
+///
 /// **Not the same as Garmin:** `GarminManager` uses Garmin Connect IQ to send messages to the
 /// watch while Trio is active. This server answers HTTP **pull** requests on loopback. iOS will
 /// **suspend** Trio when another app is frontmost, so Safari/Rebble cannot rely on this URL staying
@@ -143,7 +146,8 @@ final class PebbleLocalAPIServer {
             case "/api/cgm": return (200, "application/json", dataBridge.cgmJSON())
             case "/api/loop": return (200, "application/json", dataBridge.loopJSON())
             case "/api/pump": return (200, "application/json", dataBridge.pumpJSON())
-            case "/api/all": return (200, "application/json", dataBridge.allDataJSON())
+            case "/api/all", "/api/pebble/v1/snapshot":
+                return (200, "application/json", dataBridge.allDataJSON())
             case "/api/commands/pending": return (200, "application/json", commandManager.pendingCommandsJSON())
             case "/health": return (200, "application/json", "{\"status\":\"ok\"}")
             default: return (404, "application/json", "{\"error\":\"not found\"}")
@@ -178,7 +182,8 @@ final class PebbleLocalAPIServer {
         <li><a href="/api/cgm"><code>/api/cgm</code></a> — CGM JSON</li>
         <li><a href="/api/loop"><code>/api/loop</code></a> — loop JSON</li>
         <li><a href="/api/pump"><code>/api/pump</code></a> — pump JSON</li>
-        <li><a href="/api/all"><code>/api/all</code></a> — combined JSON</li>
+        <li><a href="/api/all"><code>/api/all</code></a> — combined JSON (same as <code>/api/pebble/v1/snapshot</code>)</li>
+        <li><a href="/api/pebble/v1/snapshot"><code>/api/pebble/v1/snapshot</code></a> — versioned Pebble snapshot</li>
         </ul>
         <p style="color:#666;font-size:0.9rem;">Use Safari <em>on this device</em>; another computer’s browser cannot reach <code>127.0.0.1</code> here.</p>
         </body></html>

@@ -34,6 +34,10 @@ struct PebbleServiceFormView: View {
                     String(localized: "Enable Pebble integration", comment: "Pebble service toggle"),
                     isOn: $service.isEnabled
                 )
+                Toggle(
+                    String(localized: "Native iOS BLE data push (experimental)", comment: "Pebble optional PebbleKit iOS BLE toggle"),
+                    isOn: $service.useNativeBLEPush
+                )
                 HStack {
                     Text(String(localized: "Local HTTP port", comment: "Pebble JS fallback server port label"))
                     Spacer()
@@ -58,7 +62,7 @@ struct PebbleServiceFormView: View {
                 Text(
                     String(
                         localized:
-                        "When PebbleKit iOS is linked, Trio pushes CGM and loop data over Bluetooth on each update. The HTTP port is used by PebbleKit JS in the Rebble app as a fallback.",
+                        "Recommended: leave native BLE off. PebbleKit JavaScript in Rebble polls this port and sends data to the watch — that is the supported, future-proof path. Enable native iOS BLE only if you understand it may be unreliable when Trio is backgrounded.",
                         comment: "Pebble service help footer"
                     )
                 )
@@ -96,6 +100,11 @@ struct PebbleServiceFormView: View {
         }
         .navigationTitle(String(localized: "Pebble", comment: "Pebble service navigation title"))
         .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: service.useNativeBLEPush) { _, _ in
+            if mode == .settings {
+                service.persistUpdate()
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button(mode == .create ? String(localized: "Continue", comment: "Pebble onboarding continue") : String(

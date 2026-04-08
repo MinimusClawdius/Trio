@@ -16,16 +16,12 @@ protocol PebbleBLEBridgeDelegate: AnyObject {
 
 // MARK: - PebbleBLEBridge
 
-/// Pushes Trio data directly to the Pebble watch over Bluetooth via PebbleKit iOS.
+/// Optional native push: **Trio → PebbleKit iOS → Rebble → BLE → watch** AppMessages.
 ///
-/// Communication path: **Trio → PebbleKit iOS → Rebble app → BLE → Pebble watch**
+/// **Off by default** in Trio (`PebbleService.useNativeBLEPush`). The supported primary pipe is
+/// PebbleKit **JavaScript** polling `127.0.0.1` and calling `Pebble.sendAppMessage` — same watch handler, fewer iOS lifecycle surprises.
 ///
-/// When `PebbleKit.framework` is linked, messages arrive in the watch's existing
-/// `inbox_received` handler identically to messages sent by PebbleKit JS,
-/// so no C-side changes are required.
-///
-/// When the SDK is **not** linked (framework absent), the bridge compiles but
-/// `start()` / `sendState()` are harmless no-ops — the HTTP fallback handles data.
+/// When `PebbleKit.framework` is absent, `start()` / `sendState()` are no-ops.
 ///
 /// ## Background mode
 /// With `bluetooth-central` + `bluetooth-peripheral` UIBackgroundModes, iOS allows

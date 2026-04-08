@@ -3,6 +3,10 @@ import Foundation
 /// Translates Trio's dev-branch WatchState into JSON endpoint responses
 /// for the Pebble local HTTP API.
 ///
+/// **Primary transport (supported):** PebbleKit **JavaScript** in the Rebble app polls this API
+/// (`GET /api/all`) and forwards data to the watch via `Pebble.sendAppMessage`. That path matches
+/// where community development happens and stays future-proof relative to optional native iOS BLE.
+///
 /// **Persistence vs Garmin:** Garmin uses Connect IQ to push JSON to the watch when Trio runs.
 /// This API is an HTTP server on `127.0.0.1`; when iOS **suspends** Trio (Safari or Rebble in front),
 /// the process stops serving — there is no always-on socket like a desktop server. A short
@@ -15,9 +19,13 @@ final class PebbleDataBridge {
     private static let cachedCGMJSONAtKey = "PebbleDataBridge.cached.cgmJSON.at"
     private static let cacheMaxAge: TimeInterval = 24 * 3600
 
-    /// Set by `BasePebbleManager` to reflect PebbleKit iOS BLE connectivity.
-    /// When `true`, PebbleKit JS should reduce HTTP polling because the watch
-    /// is receiving data directly via BLE push.
+    /// Monotonic counter bumped on each `WatchState` snapshot — PebbleKit JS can log or detect stalls.
+    private(set) var stateRevision: UInt64 = 0
+
+    /// User/service toggle: Trio's native PebbleKit iOS bridge may push AppMessages (optional).
+    var nativeIosBlePushEnabled: Bool = false
+
+    /// `true` when native iOS BLE push is enabled **and** PebbleKit reports a connected watch.
     var isBLEPushActive: Bool = false
 
     private var currentGlucose: String?
@@ -58,6 +66,8 @@ final class PebbleDataBridge {
         glucoseValues = state.glucoseValues.map { gv in
             (date: gv.date, glucose: gv.glucose, color: gv.color)
         }
+
+        stateRevision &+= 1
     }
 
     // MARK: - JSON Endpoints
@@ -118,7 +128,8 @@ final class PebbleDataBridge {
     func allDataJSON() -> String {
         let timestamp = isoFormatter.string(from: Date())
         let ble = isBLEPushActive ? "true" : "false"
-        return "{\"timestamp\":\"\(timestamp)\",\"cgm\":\(cgmJSON()),\"loop\":\(loopJSON()),\"pump\":\(pumpJSON()),\"maxBolus\":\(maxBolus),\"maxCarbs\":\(maxCarbs),\"blePushActive\":\(ble)}"
+        let nativeOn = nativeIosBlePushEnabled ? "true" : "false"
+        return "{\"pebbleProtocolVersion\":1,\"stateRevision\":\(stateRevision),\"transportProfile\":\"jsPrimary\",\"nativeIosBlePushEnabled\":\(nativeOn),\"blePushActive\":\(ble),\"timestamp\":\"\(timestamp)\",\"cgm\":\(cgmJSON()),\"loop\":\(loopJSON()),\"pump\":\(pumpJSON()),\"maxBolus\":\(maxBolus),\"maxCarbs\":\(maxCarbs)}"
     }
 
     // MARK: - Helpers

@@ -106,7 +106,7 @@ struct PebbleServiceStartView: BaseView {
                 hintText: Text(
                     String(
                         localized:
-                        "Requires the Rebble app and PebbleKit iOS (optional) for Bluetooth push. PebbleKit JavaScript in Rebble can fall back to Trio’s local HTTP server. Bolus and carb requests from the watch appear in Trio for confirmation, then are delivered like Apple Watch entries (pump bolus and carb treatments).",
+                        "Uses the Rebble app: PebbleKit JavaScript polls Trio’s local HTTP server (recommended). Optional native iOS Bluetooth push is off by default — enable only in Pebble service settings if you need it. Bolus and carb requests from the watch use HTTP and appear in Trio for confirmation.",
                         comment: "Pebble help body"
                     )
                 ),

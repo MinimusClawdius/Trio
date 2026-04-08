@@ -7,19 +7,16 @@ protocol PebbleManager {
     var isEnabled: Bool { get set }
     var isRunning: Bool { get }
     var isBLEConnected: Bool { get }
+    /// Trio's optional native PebbleKit iOS AppMessage push. **Off by default** — PebbleKit JS polling `127.0.0.1` is the supported primary pipe.
+    var useNativeBLEPush: Bool { get set }
     func start()
     func stop()
 }
 
-/// Manages both communication channels to the Pebble watch:
+/// Pebble / Rebble integration:
 ///
-/// 1. **HTTP pull** — `PebbleLocalAPIServer` on `127.0.0.1` (PebbleKit JS polls this)
-/// 2. **BLE push** — `PebbleBLEBridge` via PebbleKit iOS (direct push through Rebble)
-///
-/// When the PebbleKit iOS SDK is linked and a watch is connected via BLE, data is
-/// **pushed** immediately on each `sendState` call — no polling delay. The HTTP
-/// server stays active as a fallback for when BLE is unavailable (e.g., JS-only
-/// data sources like Nightscout/Dexcom Share, or SDK not linked).
+/// 1. **Primary (supported):** `PebbleLocalAPIServer` on `127.0.0.1` — PebbleKit **JavaScript** in Rebble polls `/api/all`, normalizes data, and `Pebble.sendAppMessage`s the watch. This matches community workflow and stays maintainable.
+/// 2. **Optional:** native PebbleKit **iOS** BLE push (`PebbleBLEBridge`) when `useNativeBLEPush` is enabled in **Settings → Services → Pebble** — experimental; can be flaky under iOS background rules.
 final class BasePebbleManager: PebbleManager, Injectable {
     private let dataBridge = PebbleDataBridge()
     private let commandManager = PebbleCommandManager()
@@ -39,6 +36,9 @@ final class BasePebbleManager: PebbleManager, Injectable {
     private(set) var isRunning = false
 
     var isBLEConnected: Bool { bleBridge.isConnected }
+
+    /// Persisted only via `PebbleService` when onboarded; otherwise stays `false`.
+    var useNativeBLEPush: Bool = false
 
     /// Block-based observer (`BasePebbleManager` is not `NSObject`; `#selector` observers do not compile).
     private var pebbleIntegrationConfigObserver: NSObjectProtocol?
@@ -75,16 +75,22 @@ final class BasePebbleManager: PebbleManager, Injectable {
     func start() {
         guard !isRunning else { return }
 
-        // HTTP server (PebbleKit JS fallback)
+        // HTTP server — PebbleKit JS primary transport
         let server = PebbleLocalAPIServer(dataBridge: dataBridge, commandManager: commandManager, port: port)
         apiServer = server
         server.start()
 
-        // BLE push (PebbleKit iOS — primary when SDK linked)
-        bleBridge.start()
+        if useNativeBLEPush {
+            bleBridge.start()
+        } else {
+            bleBridge.stop()
+            dataBridge.isBLEPushActive = false
+        }
 
         isRunning = true
-        let bleStatus = bleBridge.isRunning ? "BLE active" : "BLE inactive (SDK not linked)"
+        let bleStatus = useNativeBLEPush
+            ? (bleBridge.isRunning ? "native BLE bridge on" : "native BLE bridge inactive (SDK?)")
+            : "native BLE off (JS + HTTP only)"
         debug(.service, "Pebble: integration started — HTTP on port \(port), \(bleStatus)")
     }
 
@@ -99,14 +105,30 @@ final class BasePebbleManager: PebbleManager, Injectable {
     func sendState(_ state: WatchState) {
         guard isEnabled else { return }
 
-        // Keep HTTP bridge informed of BLE status so JS can read it from /api/all
-        dataBridge.isBLEPushActive = bleBridge.isConnected
+        dataBridge.nativeIosBlePushEnabled = useNativeBLEPush
+        dataBridge.isBLEPushActive = useNativeBLEPush && bleBridge.isConnected
 
-        // Always update the HTTP data bridge (JS may be polling)
+        // Always refresh HTTP snapshot — PebbleKit JS is the default consumer.
         dataBridge.updateFromWatchState(state)
 
-        // Push over BLE if connected (arrives instantly on the watch)
-        bleBridge.sendState(state)
+        if useNativeBLEPush {
+            bleBridge.sendState(state)
+        }
+    }
+
+    /// Syncs optional native BLE transport without restarting the HTTP server.
+    func setUseNativeBLEPush(_ enabled: Bool) {
+        guard useNativeBLEPush != enabled else { return }
+        useNativeBLEPush = enabled
+        guard isRunning else { return }
+        if enabled {
+            dataBridge.nativeIosBlePushEnabled = true
+            bleBridge.start()
+        } else {
+            bleBridge.stop()
+            dataBridge.isBLEPushActive = false
+            dataBridge.nativeIosBlePushEnabled = false
+        }
     }
 
     func getCommandManager() -> PebbleCommandManager {

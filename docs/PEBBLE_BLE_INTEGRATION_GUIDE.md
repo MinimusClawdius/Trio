@@ -1,15 +1,17 @@
 # Pebble BLE Push Integration Guide
 
+> **Update:** Trio’s **default** Pebble path is **PebbleKit JS + loopback HTTP** (`/api/all`). Native iOS BLE push is **optional** and **off by default** (`PebbleService.useNativeBLEPush`). See **[PEBBLE_JS_PRIMARY_ARCHITECTURE.md](./PEBBLE_JS_PRIMARY_ARCHITECTURE.md)** for the current contract and versioning.
+
 ## Overview
 
-Trio now supports **two parallel channels** for communicating with the Pebble watchface:
+Trio can use **two channels**; only one should be thought of as “primary”:
 
-| Channel | Transport | Direction | Latency | Background? |
-|---------|-----------|-----------|---------|-------------|
-| **HTTP pull** (existing) | `127.0.0.1:8080` | JS polls Trio | 30s poll interval | Limited (~25s tasks) |
-| **BLE push** (new) | PebbleKit iOS → Rebble → BLE | Trio pushes to watch | Instant on data change | Yes (bluetooth-central) |
+| Channel | Transport | Default? | Notes |
+|---------|-----------|----------|-------|
+| **HTTP + JS** | `127.0.0.1` — pkjs polls Trio | **Yes** | Supported, versioned snapshot (`pebbleProtocolVersion`, `stateRevision`). |
+| **Native iOS BLE** | PebbleKit iOS → Rebble → BLE | **No (opt-in)** | Best-effort; enable only in Pebble service settings. |
 
-Both channels deliver data in the **same AppMessage format**, so the watch C code's `inbox_received` handler works identically regardless of source.
+Both channels target the **same AppMessage key layout** on the watch when native push is enabled.
 
 ## Architecture
 
