@@ -27,7 +27,7 @@ final class PebbleService: Service, ObservableObject {
         isOnboarded = false
     }
 
-    public init?(rawState: RawStateValue) {
+    init?(rawState: RawStateValue) {
         guard let id = rawState["id"] as? String else {
             return nil
         }
