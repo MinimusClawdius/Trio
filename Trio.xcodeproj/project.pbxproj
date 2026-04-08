@@ -425,7 +425,6 @@
 		A1B201042E260CD5F03000A /* PebbleCommandConfirmationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B201042E260CD5F030009 /* PebbleCommandConfirmationView.swift */; };
 		F7E8B10426E260CD5FA0002 /* PebbleBLEBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7E8B10426E260CD5FA0001 /* PebbleBLEBridge.swift */; };
 		F7E8B10426E260CD5FA0004 /* PebbleAppMessageKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7E8B10426E260CD5FA0003 /* PebbleAppMessageKeys.swift */; };
-		A1B201042E260CD5F03000C /* WatchConfigPebbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B201042E260CD5F03000B /* WatchConfigPebbleView.swift */; };
 		E5BB20100426FCD5F030B002 /* PebbleService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BB20100426FCD5F030B001 /* PebbleService.swift */; };
 		E5BB20100426FCD5F030B004 /* PebbleService+UI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BB20100426FCD5F030B003 /* PebbleService+UI.swift */; };
 		E5BB20100426FCD5F030B006 /* PebbleServiceFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BB20100426FCD5F030B005 /* PebbleServiceFormView.swift */; };
@@ -1275,7 +1274,6 @@
 		A1B201042E260CD5F030009 /* PebbleCommandConfirmationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleCommandConfirmationView.swift; sourceTree = "<group>"; };
 		F7E8B10426E260CD5FA0001 /* PebbleBLEBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleBLEBridge.swift; sourceTree = "<group>"; };
 		F7E8B10426E260CD5FA0003 /* PebbleAppMessageKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleAppMessageKeys.swift; sourceTree = "<group>"; };
-		A1B201042E260CD5F03000B /* WatchConfigPebbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchConfigPebbleView.swift; sourceTree = "<group>"; };
 		E5BB20100426FCD5F030B001 /* PebbleService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleService.swift; sourceTree = "<group>"; };
 		E5BB20100426FCD5F030B003 /* PebbleService+UI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PebbleService+UI.swift"; sourceTree = "<group>"; };
 		E5BB20100426FCD5F030B005 /* PebbleServiceFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleServiceFormView.swift; sourceTree = "<group>"; };
@@ -3259,7 +3257,6 @@
 				CE94598629E9E4110047C9C6 /* WatchConfigRootView.swift */,
 				DDF847E72C5DABA30049BB3B /* WatchConfigAppleWatchView.swift */,
 				DDF847E92C5DABAC0049BB3B /* WatchConfigGarminView.swift */,
-				A1B201042E260CD5F03000B /* WatchConfigPebbleView.swift */,
 			);
 			path = View;
 			sourceTree = "<group>";
@@ -4858,7 +4855,6 @@
 				A1B201042E260CD5F03000A /* PebbleCommandConfirmationView.swift in Sources */,
 				F7E8B10426E260CD5FA0002 /* PebbleBLEBridge.swift in Sources */,
 				F7E8B10426E260CD5FA0004 /* PebbleAppMessageKeys.swift in Sources */,
-				A1B201042E260CD5F03000C /* WatchConfigPebbleView.swift in Sources */,
 				E5BB20100426FCD5F030B002 /* PebbleService.swift in Sources */,
 				E5BB20100426FCD5F030B004 /* PebbleService+UI.swift in Sources */,
 				E5BB20100426FCD5F030B006 /* PebbleServiceFormView.swift in Sources */,

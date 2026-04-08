@@ -14,6 +14,13 @@ struct PebbleServiceFormView: View {
     /// Only used in `.create` — called before `notifyServiceCreatedAndOnboarded` on the navigation controller.
     let onCreateFinished: (() -> Void)?
 
+    private var pebbleCommandManager: PebbleCommandManager {
+        guard let pebble = TrioApp.resolver.resolve(PebbleManager.self) as? BasePebbleManager else {
+            return PebbleCommandManager()
+        }
+        return pebble.getCommandManager()
+    }
+
     var body: some View {
         NavigationStack {
             formContent
@@ -53,6 +60,24 @@ struct PebbleServiceFormView: View {
                         localized:
                         "When PebbleKit iOS is linked, Trio pushes CGM and loop data over Bluetooth on each update. The HTTP port is used by PebbleKit JS in the Rebble app as a fallback.",
                         comment: "Pebble service help footer"
+                    )
+                )
+            }
+
+            Section {
+                NavigationLink {
+                    PebbleCommandConfirmationView(commandManager: pebbleCommandManager)
+                } label: {
+                    Text(String(localized: "Pending bolus & carb requests", comment: "Pebble service: pending watch commands link"))
+                }
+            } header: {
+                Text(String(localized: "Watch requests", comment: "Pebble service section header"))
+            } footer: {
+                Text(
+                    String(
+                        localized:
+                        "Bolus and carb entries initiated on the Pebble appear here for confirmation before Trio delivers them.",
+                        comment: "Pebble service pending requests footer"
                     )
                 )
             }
