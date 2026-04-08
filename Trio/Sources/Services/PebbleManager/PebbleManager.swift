@@ -40,25 +40,27 @@ final class BasePebbleManager: PebbleManager, Injectable {
 
     var isBLEConnected: Bool { bleBridge.isConnected }
 
+    /// Block-based observer (`BasePebbleManager` is not `NSObject`; `#selector` observers do not compile).
+    private var pebbleIntegrationConfigObserver: NSObjectProtocol?
+
     init(resolver: Resolver) {
         injectServices(resolver)
         bleBridge.delegate = self
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(Self.pebbleIntegrationConfigurationDidChange),
-            name: .pebbleIntegrationConfigurationDidChange,
-            object: nil
-        )
+        pebbleIntegrationConfigObserver = NotificationCenter.default.addObserver(
+            forName: .pebbleIntegrationConfigurationDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.applyServiceConfigurationIfNeeded()
+        }
         applyServiceConfigurationIfNeeded()
         if isEnabled { start() }
     }
 
     deinit {
-        NotificationCenter.default.removeObserver(self)
-    }
-
-    @objc private func pebbleIntegrationConfigurationDidChange() {
-        applyServiceConfigurationIfNeeded()
+        if let observer = pebbleIntegrationConfigObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     private func applyServiceConfigurationIfNeeded() {
