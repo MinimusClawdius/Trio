@@ -46,11 +46,11 @@ final class BasePebbleManager: PebbleManager, Injectable {
     init(resolver: Resolver) {
         injectServices(resolver)
         bleBridge.delegate = self
-        pebbleIntegrationConfigObserver = NotificationCenter.default.addObserver(
+        pebbleIntegrationConfigObserver = Foundation.NotificationCenter.default.addObserver(
             forName: .pebbleIntegrationConfigurationDidChange,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] (_: Notification) in
             self?.applyServiceConfigurationIfNeeded()
         }
         applyServiceConfigurationIfNeeded()
@@ -59,7 +59,7 @@ final class BasePebbleManager: PebbleManager, Injectable {
 
     deinit {
         if let observer = pebbleIntegrationConfigObserver {
-            NotificationCenter.default.removeObserver(observer)
+            Foundation.NotificationCenter.default.removeObserver(observer)
         }
     }
 

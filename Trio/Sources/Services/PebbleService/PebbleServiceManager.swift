@@ -1,11 +1,12 @@
 import Foundation
 import LoopKit
+import LoopKitUI
 import Swinject
 import UIKit
 
-extension Notification.Name {
+extension Foundation.Notification.Name {
     /// Posted when `PebbleService` persistence or enabled/port flags change; `BasePebbleManager` syncs from `PebbleServiceManager`.
-    static let pebbleIntegrationConfigurationDidChange = Notification.Name("PebbleIntegrationConfigurationDidChange")
+    static let pebbleIntegrationConfigurationDidChange = Foundation.Notification.Name("PebbleIntegrationConfigurationDidChange")
 }
 
 protocol PebbleServiceManager: AnyObject {
@@ -67,7 +68,7 @@ final class BasePebbleServiceManager: PebbleServiceManager, Injectable {
     }
 
     fileprivate func applyIntegrationConfiguration() {
-        NotificationCenter.default.post(name: .pebbleIntegrationConfigurationDidChange, object: self)
+        Foundation.NotificationCenter.default.post(name: .pebbleIntegrationConfigurationDidChange, object: self)
     }
 
     func applyConfiguration(to manager: BasePebbleManager) {

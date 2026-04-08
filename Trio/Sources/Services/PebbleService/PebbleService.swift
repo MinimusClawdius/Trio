@@ -8,7 +8,7 @@ final class PebbleService: Service, ObservableObject {
     static let pluginIdentifier = "PebbleService"
 
     static var localizedTitle: String {
-        LocalizedString("Pebble / Rebble", comment: "Title of the Pebble watch integration service")
+        String(localized: "Pebble / Rebble", comment: "Title of the Pebble watch integration service")
     }
 
     weak var serviceDelegate: ServiceDelegate?
