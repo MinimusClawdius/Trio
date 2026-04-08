@@ -244,6 +244,23 @@ jobs:
           FASTLANE_KEY: ${{ secrets.FASTLANE_KEY }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
 
+      # Match often prints "no local signing identities" / keychain partition noise before importing certs; the real failure is in xcodebuild.
+      - name: Summarize archive failure (xcodebuild log)
+        if: failure()
+        run: |
+          if [ ! -d buildlog ]; then
+            echo "No buildlog/ directory (gym may have failed before writing logs)."
+            exit 0
+          fi
+          echo "======== Grep: errors / signing / archive (last 50 hits) ========"
+          grep -n -E "error:|ARCHIVE FAILED|CodeSign|code sign|Provisioning profile|does not support|No profile|No signing" buildlog/*.log 2>/dev/null | tail -50 || true
+          echo ""
+          for f in buildlog/*.log; do
+            [ -f "$f" ] || continue
+            echo "======== tail -100 $(basename "$f") ========"
+            tail -n 100 "$f" || true
+          done
+
       # Upload to TestFlight
       - name: Fastlane upload to TestFlight
         run: bundle exec fastlane release
