@@ -132,6 +132,15 @@ final class PebbleDataBridge {
         return "{\"pebbleProtocolVersion\":1,\"stateRevision\":\(stateRevision),\"transportProfile\":\"jsPrimary\",\"nativeIosBlePushEnabled\":\(nativeOn),\"blePushActive\":\(ble),\"timestamp\":\"\(timestamp)\",\"cgm\":\(cgmJSON()),\"loop\":\(loopJSON()),\"pump\":\(pumpJSON()),\"maxBolus\":\(maxBolus),\"maxCarbs\":\(maxCarbs)}"
     }
 
+    /// Tiny JSON for `GET /api/pebble/v1/ping` — cheap reachability + revision check for PebbleKit JS.
+    func pingJSON() -> String {
+        lock.lock()
+        let rev = stateRevision
+        lock.unlock()
+        let ts = isoFormatter.string(from: Date())
+        return "{\"pebbleProtocolVersion\":1,\"stateRevision\":\(rev),\"serverTime\":\"\(ts)\"}"
+    }
+
     // MARK: - Helpers
 
     private func isGlucoseStale() -> Bool {

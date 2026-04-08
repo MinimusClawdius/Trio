@@ -51,8 +51,12 @@ enum PebbleAppMessageKey: Int, CaseIterable {
     case configCompSlot2 = 39
     case configCompSlot3 = 40
     case configClock24h = 41
+    case configGraphScaleMode = 42
+    case configGraphTimeRange = 43
+    /// Short HTTP/Trio link hint from PebbleKit JS (e.g. `No phone`, `Old 3m`). Cleared when a full CGM update arrives.
+    case trioLink = 44
 
-    // Last key = 41. Must match `trio-pebble/package.json` messageKeys and `trio_types.h` / `index.js` `K`.
+    // Last key = 44. Must match `trio-pebble/package.json` messageKeys and `trio_types.h` / `index.js` `K`.
 
     /// `NSNumber` suitable for use as an `NSDictionary` key in PebbleKit iOS messages.
     var nsKey: NSNumber { NSNumber(value: rawValue) }

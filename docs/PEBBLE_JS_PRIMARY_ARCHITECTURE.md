@@ -32,6 +32,7 @@ WatchState → PebbleDataBridge      PebbleKit JS (pkjs/index.js)
 | GET | `/api/all` | **Canonical** combined snapshot (same body as v1 snapshot). |
 | GET | `/api/pebble/v1/snapshot` | Alias for `/api/all` — use in new JS if you want an explicit versioned URL. |
 | GET | `/health` | Liveness check. |
+| GET | `/api/pebble/v1/ping` | **Minimal** JSON: `pebbleProtocolVersion`, `stateRevision`, `serverTime` — for PebbleKit JS reachability without parsing the full snapshot. |
 | GET | `/api/cgm`, `/api/loop`, `/api/pump` | Subsets (legacy / debugging). |
 | POST | `/api/bolus`, `/api/carbs`, `/api/command/confirm`, `/api/command/reject` | Watch-initiated actions and confirmations. |
 

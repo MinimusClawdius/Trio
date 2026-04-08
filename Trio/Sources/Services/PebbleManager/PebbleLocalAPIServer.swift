@@ -150,6 +150,8 @@ final class PebbleLocalAPIServer {
                 return (200, "application/json", dataBridge.allDataJSON())
             case "/api/commands/pending": return (200, "application/json", commandManager.pendingCommandsJSON())
             case "/health": return (200, "application/json", "{\"status\":\"ok\"}")
+            case "/api/pebble/v1/ping":
+                return (200, "application/json", dataBridge.pingJSON())
             default: return (404, "application/json", "{\"error\":\"not found\"}")
             }
         }
@@ -179,6 +181,7 @@ final class PebbleLocalAPIServer {
         <p>Local server is running on this iPhone.</p>
         <ul>
         <li><a href="/health"><code>/health</code></a> — JSON status</li>
+        <li><a href="/api/pebble/v1/ping"><code>/api/pebble/v1/ping</code></a> — minimal revision ping</li>
         <li><a href="/api/cgm"><code>/api/cgm</code></a> — CGM JSON</li>
         <li><a href="/api/loop"><code>/api/loop</code></a> — loop JSON</li>
         <li><a href="/api/pump"><code>/api/pump</code></a> — pump JSON</li>
