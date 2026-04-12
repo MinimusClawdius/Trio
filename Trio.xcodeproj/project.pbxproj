@@ -4194,6 +4194,7 @@
 /* Begin PBXShellScriptBuildPhase section */
 		B2C3D4E82F50124400EB5101 /* Download PebbleKit */ = {
 			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
@@ -4205,11 +4206,10 @@
 			outputFileListPaths = (
 			);
 			outputPaths = (
-				"${SRCROOT}/Vendor/PebbleKit.framework/Info.plist",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\nDEST=\"${SRCROOT}/Vendor\"\nZIP_URL=\"https://github.com/pebble/pebble-ios-sdk/releases/download/4.0.0/PebbleKit.framework.zip\"\nFW=\"${DEST}/PebbleKit.framework\"\nif [ ! -d \"${FW}\" ]; then\n  mkdir -p \"${DEST}\"\n  TMPZIP=\"${TMPDIR:-/tmp}/PebbleKit-$$.zip\"\n  curl -fsSL -o \"${TMPZIP}\" \"${ZIP_URL}\"\n  EXTRACT=\"${TMPDIR:-/tmp}/PebbleKit-extract-$$\"\n  rm -rf \"${EXTRACT}\"\n  mkdir -p \"${EXTRACT}\"\n  unzip -q -o \"${TMPZIP}\" -d \"${EXTRACT}\"\n  rm -f \"${TMPZIP}\"\n  FOUND=$(find \"${EXTRACT}\" -name PebbleKit.framework -type d | head -1)\n  if [ -z \"${FOUND}\" ]; then echo \"error: PebbleKit.framework not found in SDK zip\"; exit 1; fi\n  rm -rf \"${FW}\"\n  mv \"${FOUND}\" \"${DEST}/\"\n  rm -rf \"${EXTRACT}\"\nfi\n";
+			shellScript = "set -e\nDEST=\"${SRCROOT}/Vendor\"\nZIP_URL=\"https://github.com/pebble/pebble-ios-sdk/releases/download/4.0.0/PebbleKit.framework.zip\"\nFW=\"${DEST}/PebbleKit.framework\"\nBIN=\"${FW}/PebbleKit\"\n# Require the Mach-O inside the bundle: an empty or partial Vendor/PebbleKit.framework still satisfies -d and breaks the link step.\nif [ -f \"${BIN}\" ]; then exit 0; fi\nrm -rf \"${FW}\"\nmkdir -p \"${DEST}\"\nTMPZIP=\"${TMPDIR:-/tmp}/PebbleKit-$$.zip\"\ncurl -fsSL -o \"${TMPZIP}\" \"${ZIP_URL}\"\nEXTRACT=\"${TMPDIR:-/tmp}/PebbleKit-extract-$$\"\nrm -rf \"${EXTRACT}\"\nmkdir -p \"${EXTRACT}\"\nunzip -q -o \"${TMPZIP}\" -d \"${EXTRACT}\"\nrm -f \"${TMPZIP}\"\nFOUND=$(find \"${EXTRACT}\" -path '*/Carthage/Build/iOS/PebbleKit.framework' -type d 2>/dev/null | head -1)\nif [ -z \"${FOUND}\" ]; then FOUND=$(find \"${EXTRACT}\" -name PebbleKit.framework -type d | head -1); fi\nif [ -z \"${FOUND}\" ]; then echo \"error: PebbleKit.framework not found in SDK zip\"; exit 1; fi\nmv \"${FOUND}\" \"${DEST}/\"\nrm -rf \"${EXTRACT}\"\nif [ ! -f \"${BIN}\" ]; then echo \"error: PebbleKit binary missing after install (expected ${BIN})\"; exit 1; fi\n";
 		};
 		3811DEF525CA169200A708ED /* Swiftformat */ = {
 			isa = PBXShellScriptBuildPhase;
