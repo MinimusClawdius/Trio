@@ -140,18 +140,38 @@ platform :ios do
 
   desc "Push to TestFlight"
   lane :release do
+    setup_ci if ENV["CI"]
+
     api_key = app_store_connect_api_key(
       key_id: "#{FASTLANE_KEY_ID}",
       issuer_id: "#{FASTLANE_ISSUER_ID}",
       key_content: "#{FASTLANE_KEY}"
     )
-    
+
+    ws = ENV.fetch("GITHUB_WORKSPACE", Dir.pwd)
+    ipa_candidates = [
+      File.join(ws, "Trio.ipa"),
+      File.join(ws, "artifacts", "Trio.ipa")
+    ]
+    ipa_path = ipa_candidates.find { |p| File.exist?(p) }
+    UI.user_error!("Trio.ipa not found (looked in #{ipa_candidates.join(', ')})") unless ipa_path
+
+    # Avoid git-based helpers here: shallow CI checkouts can break last_git_commit / git_branch.
+    changelog_text =
+      if ENV["GITHUB_SHA"].to_s != ""
+        ref = ENV["GITHUB_REF_NAME"].to_s
+        ref = ENV["GITHUB_REF"].to_s.split("/").last.to_s if ref.empty?
+        "#{ref} #{ENV['GITHUB_SHA'][0, 7]}"
+      else
+        "#{git_branch} #{last_git_commit[:abbreviated_commit_hash]}"
+      end
+
     upload_to_testflight(
       api_key: api_key,
       skip_submission: false,
-      ipa: "Trio.ipa",
+      ipa: ipa_path,
       skip_waiting_for_build_processing: true,
-      changelog: git_branch+" "+last_git_commit[:abbreviated_commit_hash],
+      changelog: changelog_text
     )
   end
 
