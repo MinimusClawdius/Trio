@@ -27,7 +27,7 @@ protocol PebbleBLEBridgeDelegate: AnyObject {
 /// With `bluetooth-central` + `bluetooth-peripheral` UIBackgroundModes, iOS allows
 /// the BLE connection to survive backgrounding. PebbleKit can even relaunch Trio
 /// if the watch sends a message while Trio is suspended (BLE-only devices, fw ≥ 3.8).
-final class PebbleBLEBridge {
+final class PebbleBLEBridge: NSObject {
 
     /// trio-pebble watchface UUID from `appinfo.json`
     static let watchfaceUUIDString = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
@@ -103,8 +103,10 @@ final class PebbleBLEBridge {
         lock.unlock()
 
         let dict = buildAppMessage(from: state)
+        // PebbleKit declares `-[PBWatch appMessagesPushUpdate:withUUID:onSent:]` as `[NSNumber: Any]` in Swift.
+        let payload = dict as NSDictionary as! [NSNumber: Any]
 
-        watch.appMessagesPushUpdate(dict) { _, _, error in
+        watch.appMessagesPushUpdate(payload) { _, _, error in
             if let error = error {
                 debug(.service, "PebbleBLE: send failed — \(error.localizedDescription)")
             } else {
@@ -120,7 +122,7 @@ final class PebbleBLEBridge {
         isConnected = true
 
         receiveHandlerHandle = watch.appMessagesAddReceiveUpdateHandler { [weak self] _, update -> Bool in
-            self?.handleIncoming(update)
+            self?.handleIncoming(update as? [AnyHashable: Any])
             return true // auto-ACK
         }
 
