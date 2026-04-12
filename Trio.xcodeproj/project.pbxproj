@@ -260,6 +260,8 @@
 		3BD9687F2D8DDD8800899469 /* CryptoSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 3BD9687E2D8DDD8800899469 /* CryptoSwift */; };
 		3BF85FE32E427312000D7351 /* IOBService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BF85FE12E427312000D7351 /* IOBService.swift */; };
 		3E28F2AB2EB5337F00FB9EEB /* ConnectIQ in Frameworks */ = {isa = PBXBuildFile; productRef = 3E28F2AA2EB5337F00FB9EEB /* ConnectIQ */; };
+		B2C3D4E62F50124200EB5101 /* PebbleKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B2C3D4E52F50124100EB5101 /* PebbleKit.framework */; };
+		B2C3D4E72F50124300EB5101 /* PebbleKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B2C3D4E52F50124100EB5101 /* PebbleKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		3E54EF2C2E476DA40006F54D /* MedtrumKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3E54EF2B2E476DA40006F54D /* MedtrumKit.framework */; };
 		3E54EF2D2E476DA40006F54D /* MedtrumKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3E54EF2B2E476DA40006F54D /* MedtrumKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		3E62C7822F54CC1B00433237 /* BolusDisplayThreshold.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E62C7812F54CC1600433237 /* BolusDisplayThreshold.swift */; };
@@ -829,6 +831,7 @@
 				3B4BA7912D8DC0EC0069D5B8 /* TidepoolServiceKitUI.framework in Embed Frameworks */,
 				CE95BF602BA7715800DC3DE3 /* MockKit.framework in Embed Frameworks */,
 				CE95BF5E2BA770C300DC3DE3 /* LoopKitUI.framework in Embed Frameworks */,
+				B2C3D4E72F50124300EB5101 /* PebbleKit.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1351,6 +1354,7 @@
 		CE398D1A297D69A900DF218F /* ShareClient.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = ShareClient.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		CE3EEF992D46370A001944DD /* CustomCGMOptionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomCGMOptionsView.swift; sourceTree = "<group>"; };
 		CE51DD1B2A01970800F163F7 /* ConnectIQ 2.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = "ConnectIQ 2.xcframework"; path = "Dependencies/ConnectIQ 2.xcframework"; sourceTree = "<group>"; };
+		B2C3D4E52F50124100EB5101 /* PebbleKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = Vendor/PebbleKit.framework; sourceTree = "<group>"; };
 		CE6B025628F350FF000C5502 /* HealthKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HealthKit.framework; path = Platforms/WatchOS.platform/Developer/SDKs/WatchOS9.1.sdk/System/Library/Frameworks/HealthKit.framework; sourceTree = DEVELOPER_DIR; };
 		CE7950232997D81700FA576E /* CGMSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CGMSettingsView.swift; sourceTree = "<group>"; };
 		CE7950252998056D00FA576E /* CGMSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CGMSetupView.swift; sourceTree = "<group>"; };
@@ -1661,6 +1665,7 @@
 				E0CC2C5C275B9F0F00A7BC71 /* HealthKit.framework in Frameworks */,
 				CE95BF5D2BA770C300DC3DE3 /* LoopKitUI.framework in Frameworks */,
 				3E28F2AB2EB5337F00FB9EEB /* ConnectIQ in Frameworks */,
+				B2C3D4E62F50124200EB5101 /* PebbleKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2293,6 +2298,7 @@
 				6B1A8D012B14D88B00E76752 /* UniformTypeIdentifiers.framework */,
 				6B1A8D182B14D91600E76752 /* WidgetKit.framework */,
 				6B1A8D1A2B14D91600E76752 /* SwiftUI.framework */,
+				B2C3D4E52F50124100EB5101 /* PebbleKit.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -3895,6 +3901,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 388E596725AD948E0019842D /* Build configuration list for PBXNativeTarget "Trio" */;
 			buildPhases = (
+				B2C3D4E82F50124400EB5101 /* Download PebbleKit */,
 				3811DEF525CA169200A708ED /* Swiftformat */,
 				388E595425AD948C0019842D /* Sources */,
 				388E595525AD948C0019842D /* Frameworks */,
@@ -4185,6 +4192,25 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		B2C3D4E82F50124400EB5101 /* Download PebbleKit */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Download PebbleKit";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"${SRCROOT}/Vendor/PebbleKit.framework/Info.plist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\nDEST=\"${SRCROOT}/Vendor\"\nZIP_URL=\"https://github.com/pebble/pebble-ios-sdk/releases/download/4.0.0/PebbleKit.framework.zip\"\nFW=\"${DEST}/PebbleKit.framework\"\nif [ ! -d \"${FW}\" ]; then\n  mkdir -p \"${DEST}\"\n  TMPZIP=\"${TMPDIR:-/tmp}/PebbleKit-$$.zip\"\n  curl -fsSL -o \"${TMPZIP}\" \"${ZIP_URL}\"\n  EXTRACT=\"${TMPDIR:-/tmp}/PebbleKit-extract-$$\"\n  rm -rf \"${EXTRACT}\"\n  mkdir -p \"${EXTRACT}\"\n  unzip -q -o \"${TMPZIP}\" -d \"${EXTRACT}\"\n  rm -f \"${TMPZIP}\"\n  FOUND=$(find \"${EXTRACT}\" -name PebbleKit.framework -type d | head -1)\n  if [ -z \"${FOUND}\" ]; then echo \"error: PebbleKit.framework not found in SDK zip\"; exit 1; fi\n  rm -rf \"${FW}\"\n  mv \"${FOUND}\" \"${DEST}/\"\n  rm -rf \"${EXTRACT}\"\nfi\n";
+		};
 		3811DEF525CA169200A708ED /* Swiftformat */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
