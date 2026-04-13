@@ -83,3 +83,6 @@ ConfigOverride.xcconfig
 
 # PebbleKit (downloaded by Xcode “Download PebbleKit” build phase for the native Pebble BLE bridge)
 Vendor/PebbleKit.framework
+
+# Transient local logs (not part of the app)
+LoopKit-Trio.log
