@@ -3,6 +3,9 @@ import SwiftUI
 struct PebbleCommandConfirmationView: View {
     @ObservedObject var commandManager: PebbleCommandManager
 
+    @State private var showRejectConfirmation = false
+    @State private var rejectCommandId: String?
+
     var body: some View {
         List {
             if commandManager.pendingCommands.isEmpty {
@@ -23,6 +26,32 @@ struct PebbleCommandConfirmationView: View {
             }
         }
         .navigationTitle("Pebble Requests")
+        .confirmationDialog(
+            String(localized: "Reject this Pebble request?", comment: "Pebble reject confirmation title"),
+            isPresented: $showRejectConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(
+                String(localized: "Reject", comment: "Pebble reject confirmation confirm"),
+                role: .destructive
+            ) {
+                if let id = rejectCommandId {
+                    PebbleIntegrationFileLogger.log("ui_reject_confirmed", "id=\(id)")
+                    commandManager.rejectCommand(id)
+                }
+                rejectCommandId = nil
+            }
+            Button(String(localized: "Cancel", comment: "Pebble reject confirmation cancel"), role: .cancel) {
+                rejectCommandId = nil
+            }
+        } message: {
+            Text(
+                String(
+                    localized: "Nothing will be saved to Trio. Use Confirm to add this carb or bolus.",
+                    comment: "Pebble reject confirmation message"
+                )
+            )
+        }
     }
 
     @ViewBuilder
@@ -52,24 +81,27 @@ struct PebbleCommandConfirmationView: View {
                 .foregroundColor(.secondary)
 
             HStack {
-                Button("Reject") {
-                    commandManager.rejectCommand(command.id)
-                }
-                .foregroundColor(.white)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 8)
-                .background(Color.red)
-                .cornerRadius(8)
-
-                Spacer()
-
-                Button("Confirm") {
+                Button(String(localized: "Confirm", comment: "Pebble pending command confirm")) {
+                    PebbleIntegrationFileLogger.log("ui_confirm_tap", "id=\(command.id) type=\(command.type == .bolus ? "bolus" : "carb")")
                     commandManager.confirmCommand(command.id)
                 }
                 .foregroundColor(.white)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 8)
                 .background(Color.green)
+                .cornerRadius(8)
+
+                Spacer()
+
+                Button(String(localized: "Reject", comment: "Pebble pending command reject")) {
+                    PebbleIntegrationFileLogger.log("ui_reject_tap", "id=\(command.id) type=\(command.type == .bolus ? "bolus" : "carb")")
+                    rejectCommandId = command.id
+                    showRejectConfirmation = true
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 8)
+                .background(Color.red)
                 .cornerRadius(8)
             }
             .padding(.top, 4)
