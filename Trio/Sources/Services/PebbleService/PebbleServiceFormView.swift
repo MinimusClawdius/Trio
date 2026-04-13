@@ -14,11 +14,9 @@ struct PebbleServiceFormView: View {
     /// Only used in `.create` — called before `notifyServiceCreatedAndOnboarded` on the navigation controller.
     let onCreateFinished: (() -> Void)?
 
-    private var pebbleCommandManager: PebbleCommandManager {
-        guard let pebble = TrioApp.resolver.resolve(PebbleManager.self) as? BasePebbleManager else {
-            return PebbleCommandManager()
-        }
-        return pebble.getCommandManager()
+    /// Never substitute a throwaway manager — it would not match the instance wired to `PebbleLocalAPIServer`.
+    private var pebbleCommandManager: PebbleCommandManager? {
+        (TrioApp.resolver.resolve(PebbleManager.self) as? BasePebbleManager)?.getCommandManager()
     }
 
     var body: some View {
@@ -69,10 +67,15 @@ struct PebbleServiceFormView: View {
             }
 
             Section {
-                NavigationLink {
-                    PebbleCommandConfirmationView(commandManager: pebbleCommandManager)
-                } label: {
+                if let cmdMgr = pebbleCommandManager {
+                    NavigationLink {
+                        PebbleCommandConfirmationView(commandManager: cmdMgr)
+                    } label: {
+                        Text(String(localized: "Pending bolus & carb requests", comment: "Pebble service: pending watch commands link"))
+                    }
+                } else {
                     Text(String(localized: "Pending bolus & carb requests", comment: "Pebble service: pending watch commands link"))
+                        .foregroundStyle(.secondary)
                 }
             } header: {
                 Text(String(localized: "Watch requests", comment: "Pebble service section header"))

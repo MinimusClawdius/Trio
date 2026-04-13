@@ -40,6 +40,8 @@ final class PebbleDataBridge {
     private var maxCarbs: Decimal = 250.0
     private var units: String = "mgdL"
     private var stateDate: Date?
+    private var pumpReservoirUnits: Double?
+    private var pumpBatteryPercent: Int?
 
     private let isoFormatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
@@ -62,6 +64,8 @@ final class PebbleDataBridge {
         maxCarbs = state.maxCarbs
         units = state.units.rawValue
         stateDate = state.date
+        pumpReservoirUnits = state.pumpReservoirUnits
+        pumpBatteryPercent = state.pumpBatteryPercent
 
         glucoseValues = state.glucoseValues.map { gv in
             (date: gv.date, glucose: gv.glucose, color: gv.color)
@@ -122,7 +126,26 @@ final class PebbleDataBridge {
     }
 
     func pumpJSON() -> String {
-        return "{\"reservoir\":null,\"battery\":null}"
+        buildPumpJSONLocked()
+    }
+
+    private func buildPumpJSONLocked() -> String {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let res: String
+        if let u = pumpReservoirUnits, u.isFinite, u >= 0 {
+            if u.rounded() == u {
+                res = "\(Int(u.rounded()))"
+            } else {
+                res = String(format: "%.1f", u)
+            }
+        } else {
+            res = "null"
+        }
+
+        let bat = pumpBatteryPercent.map { "\($0)" } ?? "null"
+        return "{\"reservoir\":\(res),\"battery\":\(bat)}"
     }
 
     func allDataJSON() -> String {

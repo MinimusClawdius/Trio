@@ -165,4 +165,11 @@ extension GlucoseStored {
     var directionEnum: BloodGlucose.Direction? {
         BloodGlucose.Direction(rawValue: direction ?? "")
     }
+
+    /// Dexcom-style raw value (`FortyFiveUp`, `Flat`, …) for Pebble / HTTP so watchfaces can map to arrows reliably.
+    var pebbleTrendRawValue: String? {
+        guard let d = direction, !d.isEmpty else { return nil }
+        if let parsed = BloodGlucose.Direction(from: d) { return parsed.rawValue }
+        return BloodGlucose.Direction(rawValue: d)?.rawValue ?? d
+    }
 }

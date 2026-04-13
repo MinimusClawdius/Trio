@@ -206,8 +206,9 @@ final class PebbleBLEBridge: NSObject {
             }
         }
 
-        if let trend = state.trend {
-            msg[K.trend.nsKey] = String(trend.prefix(7))
+        if let trend = state.trend, !trend.isEmpty {
+            // Pebble cstrings are length-capped; do **not** truncate Dexcom names like `FortyFiveUp` to 7 chars.
+            msg[K.trend.nsKey] = String(trend.prefix(63))
         }
         if let delta = state.delta {
             msg[K.delta.nsKey] = String(delta.prefix(15))
@@ -253,6 +254,15 @@ final class PebbleBLEBridge: NSObject {
         let batteryLevel = Int(UIDevice.current.batteryLevel * 100)
         if batteryLevel >= 0 {
             msg[K.batteryPhone.nsKey] = NSNumber(value: Int32(batteryLevel))
+        }
+
+        // Pump reservoir / battery (watch C layer treats reservoir as int8 in places — clamp for BLE)
+        if let r = state.pumpReservoirUnits, r.isFinite, r >= 0 {
+            let clipped = min(127, max(0, Int(r.rounded())))
+            msg[K.reservoir.nsKey] = NSNumber(value: Int32(clipped))
+        }
+        if let pct = state.pumpBatteryPercent {
+            msg[K.pumpBattery.nsKey] = NSNumber(value: Int32(min(100, max(0, pct))))
         }
 
         return msg

@@ -27,6 +27,11 @@ struct WatchState: Hashable, Equatable, Sendable, Encodable, Decodable {
     var bolusIncrement: Decimal = 0.05
     var confirmBolusFaster: Bool = false
 
+    /// Remaining insulin (U) for Pebble when known; omits Trio’s “50+ U” placeholder (`0xDEAD_BEEF`).
+    var pumpReservoirUnits: Double?
+    /// Pump battery charge 0…100 when the pump reports it.
+    var pumpBatteryPercent: Int?
+
     static func == (lhs: WatchState, rhs: WatchState) -> Bool {
         lhs.date == rhs.date &&
             lhs.currentGlucose == rhs.currentGlucose &&
@@ -49,7 +54,9 @@ struct WatchState: Hashable, Equatable, Sendable, Encodable, Decodable {
             lhs.maxFat == rhs.maxFat &&
             lhs.maxProtein == rhs.maxProtein &&
             lhs.bolusIncrement == rhs.bolusIncrement &&
-            lhs.confirmBolusFaster == rhs.confirmBolusFaster
+            lhs.confirmBolusFaster == rhs.confirmBolusFaster &&
+            lhs.pumpReservoirUnits == rhs.pumpReservoirUnits &&
+            lhs.pumpBatteryPercent == rhs.pumpBatteryPercent
     }
 
     func hash(into hasher: inout Hasher) {
@@ -76,5 +83,7 @@ struct WatchState: Hashable, Equatable, Sendable, Encodable, Decodable {
         hasher.combine(maxProtein)
         hasher.combine(bolusIncrement)
         hasher.combine(confirmBolusFaster)
+        hasher.combine(pumpReservoirUnits)
+        hasher.combine(pumpBatteryPercent)
     }
 }

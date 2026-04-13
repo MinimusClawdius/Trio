@@ -18,6 +18,10 @@ import Glibc
 /// **suspend** Trio when another app is frontmost, so Safari/Rebble cannot rely on this URL staying
 /// reachable indefinitely — only a ~25s background extension is started per accepted connection.
 final class PebbleLocalAPIServer {
+    private static let headerSeparator = Data("\r\n\r\n".utf8)
+    /// Cap total request size (headers + body) to avoid unbounded reads.
+    private static let maxRequestBytes = 512 * 1024
+
     private var serverSocket: Int32 = -1
     private var isRunning = false
     private let port: UInt16
@@ -120,22 +124,103 @@ final class PebbleLocalAPIServer {
         }
     }
 
+    /// Avoid blocking forever if the client stalls mid-request (loopback only, but keeps the accept loop healthy).
+    private static func setReceiveTimeout(seconds: Int32, socketFD: Int32) {
+        var tv = timeval(tv_sec: seconds, tv_usec: 0)
+        _ = setsockopt(socketFD, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
+    }
+
+    /// Reads until `\r\n\r\n` plus full `Content-Length` body (many clients split headers and body across packets).
+    private func readCompleteHTTPRequest(_ clientSocket: Int32) -> Data? {
+        Self.setReceiveTimeout(seconds: 30, socketFD: clientSocket)
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 8192)
+
+        while data.count < Self.maxRequestBytes {
+            let n = read(clientSocket, &buffer, buffer.count)
+            if n < 0 { break }
+            if n == 0 { break }
+            data.append(contentsOf: buffer.prefix(n))
+
+            guard let headerRange = data.range(of: Self.headerSeparator) else { continue }
+
+            let headerBytes = data.subdata(in: 0 ..< headerRange.lowerBound)
+            guard let headerText = String(data: headerBytes, encoding: .utf8) else { return nil }
+            let contentLength = Self.parseContentLength(from: headerText)
+            let bodyStart = headerRange.upperBound
+            let needed = bodyStart + contentLength
+            guard needed <= Self.maxRequestBytes else {
+                debug(.service, "Pebble HTTP: rejecting oversized Content-Length (\(contentLength))")
+                return nil
+            }
+            if data.count >= needed {
+                return Data(data.prefix(needed))
+            }
+        }
+
+        return data.isEmpty ? nil : data
+    }
+
+    private static func parseContentLength(from headerBlock: String) -> Int {
+        for line in headerBlock.split(separator: "\r\n", omittingEmptySubsequences: false) {
+            let trimmed = String(line).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let colon = trimmed.firstIndex(of: ":") else { continue }
+            let name = trimmed[..<colon].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard name == "content-length" else { continue }
+            let value = trimmed[trimmed.index(after: colon)...].trimmingCharacters(in: .whitespacesAndNewlines)
+            return Int(value) ?? 0
+        }
+        return 0
+    }
+
     private func handleRequest(_ clientSocket: Int32) {
         defer { close(clientSocket) }
 
-        var buffer = [UInt8](repeating: 0, count: 8192)
-        let bytesRead = read(clientSocket, &buffer, buffer.count)
-        guard bytesRead > 0 else { return }
+        guard let requestData = readCompleteHTTPRequest(clientSocket) else { return }
+        guard let parsed = Self.parseHTTPRequest(requestData) else {
+            debug(.service, "Pebble HTTP: could not parse request (\(requestData.count) bytes)")
+            let response = buildHTTPResponse(statusCode: 400, contentType: "application/json", body: "{\"error\":\"bad request\"}")
+            _ = write(clientSocket, [UInt8](response.utf8), response.utf8.count)
+            return
+        }
 
-        let request = String(bytes: buffer[0 ..< bytesRead], encoding: .utf8) ?? ""
-        let method = extractMethod(from: request)
-        let path = extractPath(from: request)
-        let body = extractBody(from: request)
-
-        let (statusCode, contentType, responseBody) = routeRequest(method: method, path: path, body: body)
+        let (statusCode, contentType, responseBody) = routeRequest(method: parsed.method, path: parsed.path, body: parsed.body)
         let response = buildHTTPResponse(statusCode: statusCode, contentType: contentType, body: responseBody)
         let responseData = [UInt8](response.utf8)
         _ = write(clientSocket, responseData, responseData.count)
+    }
+
+    private struct ParsedHTTPRequest {
+        let method: String
+        let path: String
+        let body: String?
+    }
+
+    /// Split headers and body using byte-accurate `Content-Length` (body is not guaranteed UTF-8–safe to split in a combined `String`).
+    private static func parseHTTPRequest(_ data: Data) -> ParsedHTTPRequest? {
+        guard let sep = data.range(of: Self.headerSeparator) else { return nil }
+        let headerData = data.subdata(in: 0 ..< sep.lowerBound)
+        guard let headers = String(data: headerData, encoding: .utf8) else { return nil }
+        let contentLength = parseContentLength(from: headers)
+        let bodyStart = sep.upperBound
+        guard data.count >= bodyStart + contentLength else { return nil }
+
+        let bodySlice = data.subdata(in: bodyStart ..< (bodyStart + contentLength))
+        let bodyString: String?
+        if contentLength == 0 {
+            bodyString = nil
+        } else {
+            bodyString = String(data: bodySlice, encoding: .utf8)
+            if bodyString == nil { return nil }
+        }
+
+        let firstLine = headers.split(separator: "\r\n", maxSplits: 1, omittingEmptySubsequences: true).first.map(String.init) ?? ""
+        let parts = firstLine.split(separator: " ").map(String.init)
+        guard parts.count >= 2 else { return nil }
+        let method = parts[0]
+        let rawPath = parts[1]
+        let path = rawPath.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? rawPath
+        return ParsedHTTPRequest(method: method, path: path, body: bodyString)
     }
 
     private func routeRequest(method: String, path: String, body: String?) -> (Int, String, String) {
@@ -193,12 +278,22 @@ final class PebbleLocalAPIServer {
         """
     }
 
+    private func jsonDouble(_ json: [String: Any], key: String) -> Double? {
+        if let d = json[key] as? Double { return d }
+        if let i = json[key] as? Int { return Double(i) }
+        if let n = json[key] as? NSNumber { return n.doubleValue }
+        return nil
+    }
+
     private func handleBolusRequest(_ body: String?) -> (Int, String, String) {
         guard let body = body,
               let data = body.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let units = json["units"] as? Double
-        else { return (400, "application/json", "{\"error\":\"invalid request, requires 'units'\"}") }
+              let units = jsonDouble(json, key: "units")
+        else {
+            debug(.service, "Pebble HTTP: /api/bolus rejected — missing body or invalid JSON")
+            return (400, "application/json", "{\"error\":\"invalid request, requires 'units'\"}")
+        }
 
         guard let command = commandManager.queueBolus(units: units) else {
             return (400, "application/json", "{\"error\":\"bolus exceeds safety limits\"}")
@@ -211,10 +306,13 @@ final class PebbleLocalAPIServer {
         guard let body = body,
               let data = body.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let grams = json["grams"] as? Double
-        else { return (400, "application/json", "{\"error\":\"invalid request, requires 'grams'\"}") }
+              let grams = jsonDouble(json, key: "grams")
+        else {
+            debug(.service, "Pebble HTTP: /api/carbs rejected — missing body or invalid JSON")
+            return (400, "application/json", "{\"error\":\"invalid request, requires 'grams'\"}")
+        }
 
-        let absorptionHours = json["absorptionHours"] as? Double ?? 3.0
+        let absorptionHours = jsonDouble(json, key: "absorptionHours") ?? 3.0
 
         guard let command = commandManager.queueCarbEntry(grams: grams, absorptionHours: absorptionHours) else {
             return (400, "application/json", "{\"error\":\"carb amount exceeds safety limits\"}")
@@ -243,21 +341,6 @@ final class PebbleLocalAPIServer {
 
         commandManager.rejectCommand(commandId)
         return (200, "application/json", "{\"status\":\"rejected\"}")
-    }
-
-    private func extractMethod(from request: String) -> String {
-        request.components(separatedBy: "\r\n").first?.components(separatedBy: " ").first ?? "GET"
-    }
-
-    private func extractPath(from request: String) -> String {
-        let parts = request.components(separatedBy: "\r\n").first?.components(separatedBy: " ") ?? []
-        return parts.count >= 2 ? parts[1] : "/"
-    }
-
-    private func extractBody(from request: String) -> String? {
-        guard let range = request.range(of: "\r\n\r\n") else { return nil }
-        let body = String(request[range.upperBound...])
-        return body.isEmpty ? nil : body
     }
 
     private func buildHTTPResponse(statusCode: Int, contentType: String, body: String) -> String {

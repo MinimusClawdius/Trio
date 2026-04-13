@@ -30,6 +30,7 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
     @Injected() private var notificationsManager: UserNotificationsManager!
     @Injected() private var pebble: PebbleManager!
     @Injected() private var pebbleServiceManager: PebbleServiceManager!
+    @Injected() private var carbsStorage: CarbsStorage!
 
     private var units: GlucoseUnits = .mgdL
     private var glucoseColorScheme: GlucoseColorScheme = .staticColor
@@ -115,26 +116,24 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
         cmdMgr.executeCarbs = { [weak self] grams, _ in
             guard let self = self else { return }
             guard self.pebbleServiceManager.isPebbleDataDeliveryEnabled else { return }
-            let context = CoreDataStack.shared.newTaskContext()
+            let entry = CarbsEntry(
+                id: UUID().uuidString,
+                createdAt: Date(),
+                actualDate: nil,
+                carbs: Decimal(grams),
+                fat: nil,
+                protein: nil,
+                note: "Via Pebble",
+                enteredBy: CarbsEntry.local,
+                isFPU: false,
+                fpuID: nil
+            )
             Task {
-                await context.perform {
-                    // Same path as Apple Watch carbs: Core Data carb entries feed oref / Nightscout as treatments.
-                    let carbEntry = CarbEntryStored(context: context)
-                    carbEntry.id = UUID()
-                    carbEntry.carbs = grams
-                    carbEntry.date = Date()
-                    carbEntry.note = "Via Pebble"
-                    carbEntry.isFPU = false
-                    carbEntry.isUploadedToNS = false
-                    carbEntry.isUploadedToHealth = false
-                    carbEntry.isUploadedToTidepool = false
-                    do {
-                        guard context.hasChanges else { return }
-                        try context.save()
-                        debug(.service, "Pebble: saved carb entry \(grams)g")
-                    } catch {
-                        debug(.service, "Pebble: error saving carbs: \(error)")
-                    }
+                do {
+                    try await self.carbsStorage.storeCarbs([entry], areFetchedFromRemote: false)
+                    debug(.service, "Pebble: stored carb entry \(grams)g via CarbsStorage")
+                } catch {
+                    debug(.service, "Pebble: error storing carbs: \(error)")
                 }
             }
         }
@@ -238,6 +237,11 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
     /// Loads the same snapshot used for watch faces from Trio storage (Pebble HTTP API uses this even without a reachable Watch).
     private func assembleWatchStateFromCoreData() async -> WatchState {
         do {
+            let pumpReservoirUnits = Self.normalizeReservoirForPebble(
+                await fileStorage.retrieveAsync(OpenAPS.Monitor.reservoir, as: Decimal.self)
+            )
+            let pumpBatteryPercent = Self.pumpBatteryPercent(from: apsManager)
+
             // Get NSManagedObjectIDs
             let glucoseIds = try await fetchGlucose()
             let determinationIds = try await determinationStorage.fetchLastDeterminationObjectID(
@@ -258,6 +262,8 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
 
             return await backgroundContext.perform {
                 var watchState = WatchState(date: Date())
+                watchState.pumpReservoirUnits = pumpReservoirUnits
+                watchState.pumpBatteryPercent = pumpBatteryPercent
 
                 // Set lastLoopDate
                 let lastLoopMinutes = Int((Date().timeIntervalSince(self.apsManager.lastLoopDate) - 30) / 60) + 1
@@ -371,8 +377,8 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
                     watchState.minYAxisValue = minYValue
                 }
 
-                // Convert direction to trend string
-                watchState.trend = latestGlucose.direction
+                // Dexcom-style trend for Pebble / watchfaces (avoids ambiguous or non-Dexcom strings).
+                watchState.trend = latestGlucose.pebbleTrendRawValue
 
                 // Calculate delta if we have at least 2 readings
                 if glucoseObjects.count >= 2 {
@@ -1324,6 +1330,24 @@ extension BaseWatchManager {
 }
 
 extension BaseWatchManager {
+    /// Same sentinel as home / Nightscout when reservoir is intentionally hidden (e.g. 50+ U on some pumps).
+    private static let reservoirUnavailableMarker = Decimal(UInt32(0xDEAD_BEEF))
+
+    private static func normalizeReservoirForPebble(_ decimal: Decimal?) -> Double? {
+        guard let decimal else { return nil }
+        guard decimal != reservoirUnavailableMarker else { return nil }
+        let v = Double(truncating: decimal as NSNumber)
+        guard v.isFinite, v >= 0, v < 1000 else { return nil }
+        return v
+    }
+
+    private static func pumpBatteryPercent(from aps: APSManager) -> Int? {
+        guard let frac = aps.pumpManager?.status.pumpBatteryChargeRemaining else { return nil }
+        let p = (frac * 100).rounded()
+        guard p >= 0, p <= 100 else { return nil }
+        return Int(p)
+    }
+
     enum AcknowledgmentCode: String, Codable {
         case savingCarbs = "saving_carbs"
         case enactingBolus = "enacting_bolus"
