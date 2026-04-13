@@ -12,8 +12,9 @@ struct PebbleCommandConfirmationView: View {
                 Section {
                     HStack {
                         Spacer()
-                        Text("No pending commands")
+                        Text(String(localized: "Nothing pending — Pebble bolus and carbs are sent straight to Trio.", comment: "Pebble pending list empty"))
                             .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
                         Spacer()
                     }
                 }
@@ -47,7 +48,7 @@ struct PebbleCommandConfirmationView: View {
         } message: {
             Text(
                 String(
-                    localized: "Nothing will be saved to Trio. Use Confirm to add this carb or bolus.",
+                    localized: "Nothing will be changed in Trio for this request.",
                     comment: "Pebble reject confirmation message"
                 )
             )
@@ -107,43 +108,5 @@ struct PebbleCommandConfirmationView: View {
             .padding(.top, 4)
         }
         .padding(.vertical, 4)
-    }
-}
-
-/// Presents **Pebble Requests** as a sheet whenever a new bolus/carb is queued (HTTP or BLE), so confirmation is not buried in Settings.
-struct PebblePendingCommandsGlobalPresenter: ViewModifier {
-    @State private var showPendingSheet = false
-
-    func body(content: Content) -> some View {
-        content
-            .onReceive(Foundation.NotificationCenter.default.publisher(for: Foundation.Notification.Name.pebbleDidEnqueuePendingCommand)) { _ in
-                guard let pebbleSvc = TrioApp.resolver.resolve(PebbleServiceManager.self),
-                      pebbleSvc.isPebbleDataDeliveryEnabled
-                else { return }
-                guard (TrioApp.resolver.resolve(PebbleManager.self) as? BasePebbleManager)?.getCommandManager()
-                    .pendingCommands.isEmpty == false
-                else { return }
-                PebbleIntegrationFileLogger.log("ui_sheet", "presenting Pebble pending requests sheet")
-                showPendingSheet = true
-            }
-            .sheet(isPresented: $showPendingSheet) {
-                Group {
-                    if let cmdMgr = (TrioApp.resolver.resolve(PebbleManager.self) as? BasePebbleManager)?.getCommandManager() {
-                        NavigationStack {
-                            PebbleCommandConfirmationView(commandManager: cmdMgr)
-                                .toolbar {
-                                    ToolbarItem(placement: .cancellationAction) {
-                                        Button(String(localized: "Close", comment: "Dismiss Pebble pending sheet")) {
-                                            showPendingSheet = false
-                                        }
-                                    }
-                                }
-                        }
-                    } else {
-                        Text(String(localized: "Pebble is unavailable.", comment: "Pebble sheet error"))
-                            .padding()
-                    }
-                }
-            }
     }
 }

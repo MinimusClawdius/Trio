@@ -84,10 +84,10 @@ struct PebbleServiceFormView: View {
                     NavigationLink {
                         PebbleCommandConfirmationView(commandManager: cmdMgr)
                     } label: {
-                        Text(String(localized: "Pending bolus & carb requests", comment: "Pebble service: pending watch commands link"))
+                        Text(String(localized: "Remote command queue", comment: "Pebble service: pending watch commands link"))
                     }
                 } else {
-                    Text(String(localized: "Pending bolus & carb requests", comment: "Pebble service: pending watch commands link"))
+                    Text(String(localized: "Remote command queue", comment: "Pebble service: pending watch commands link"))
                         .foregroundStyle(.secondary)
                 }
             } header: {
@@ -96,7 +96,7 @@ struct PebbleServiceFormView: View {
                 Text(
                     String(
                         localized:
-                        "When a bolus or carb arrives from the Pebble, Trio opens a confirmation sheet automatically. You can also review the queue here.",
+                        "Remote bolus and carbs are sent straight into Trio. This list is normally empty; use it only if you need to inspect a stuck request.",
                         comment: "Pebble service pending requests footer"
                     )
                 )

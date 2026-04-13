@@ -335,7 +335,6 @@ extension Notification.Name {
                         .onOpenURL(perform: handleURL)
                 }
             }
-            .modifier(PebblePendingCommandsGlobalPresenter())
             .onReceive(Foundation.NotificationCenter.default.publisher(for: .onboardingCompleted)) { _ in
                 Task { @MainActor in
                     self.showOnboardingCompletedSplash = true

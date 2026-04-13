@@ -1,4 +1,5 @@
 import Combine
+import CoreData
 import Foundation
 import Swinject
 
@@ -24,6 +25,9 @@ final class BasePebbleManager: PebbleManager, Injectable {
     private var apiServer: PebbleLocalAPIServer?
 
     @Injected() private var pebbleServiceManager: PebbleServiceManager!
+    @Injected() private var bolusCalculationManager: BolusCalculationManager!
+    @Injected() private var apsManager: APSManager!
+    @Injected() private var determinationStorage: DeterminationStorage!
 
     @Persisted(key: "BasePebbleManager.isEnabled") var isEnabled: Bool = false {
         didSet {
@@ -76,7 +80,15 @@ final class BasePebbleManager: PebbleManager, Injectable {
         guard !isRunning else { return }
 
         // HTTP server — PebbleKit JS primary transport
-        let server = PebbleLocalAPIServer(dataBridge: dataBridge, commandManager: commandManager, port: port)
+        let server = PebbleLocalAPIServer(
+            dataBridge: dataBridge,
+            commandManager: commandManager,
+            port: port,
+            recommendBolusForCarbsGrams: { [weak self] grams in
+                guard let self else { return 0 }
+                return await self.pebbleRecommendedBolusUnits(forCarbsGrams: grams)
+            }
+        )
         apiServer = server
         server.start()
 
@@ -143,6 +155,38 @@ final class BasePebbleManager: PebbleManager, Injectable {
         guard newPort >= 1024, newPort <= 65535 else { return }
         port = newPort
         if isRunning { stop(); start() }
+    }
+
+    /// Uses the same bolus calculator path as Apple Watch recommendations (`BolusCalculationManager`).
+    private func pebbleRecommendedBolusUnits(forCarbsGrams grams: Double) async -> Decimal {
+        var minPredBG: Decimal = 54
+        let bgContext = CoreDataStack.shared.newTaskContext()
+        do {
+            let determinationIds = try await determinationStorage.fetchLastDeterminationObjectID(
+                predicate: NSPredicate.predicateFor30MinAgoForDetermination
+            )
+            let determinationObjects: [OrefDetermination] = try await CoreDataStack.shared.getNSManagedObject(
+                with: determinationIds,
+                context: bgContext
+            )
+            if let first = determinationObjects.first {
+                minPredBG = first.minPredBGFromReason ?? 54
+            }
+        } catch {
+            debug(.service, "Pebble: bolus recommendation minPredBG fetch failed: \(error)")
+        }
+
+        let result = await bolusCalculationManager.handleBolusCalculation(
+            carbs: Decimal(grams),
+            useFattyMealCorrection: false,
+            useSuperBolus: false,
+            lastLoopDate: apsManager.lastLoopDate,
+            minPredBG: minPredBG,
+            simulatedCOB: nil,
+            isBackdated: false
+        )
+        let rounded = apsManager.roundBolus(amount: result.insulinCalculated)
+        return Swift.max(Decimal(0), rounded)
     }
 }
 

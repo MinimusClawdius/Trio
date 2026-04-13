@@ -1,3 +1,4 @@
+import Dispatch
 import Foundation
 import UIKit
 
@@ -27,11 +28,19 @@ final class PebbleLocalAPIServer {
     private let port: UInt16
     private let dataBridge: PebbleDataBridge
     private let commandManager: PebbleCommandManager
+    /// Optional carb → bolus recommendation (same engine as Apple Watch); used by `GET /api/pebble/v1/bolus_recommendation`.
+    private let recommendBolusForCarbsGrams: ((Double) async -> Decimal)?
 
-    init(dataBridge: PebbleDataBridge, commandManager: PebbleCommandManager, port: UInt16 = 8080) {
+    init(
+        dataBridge: PebbleDataBridge,
+        commandManager: PebbleCommandManager,
+        port: UInt16 = 8080,
+        recommendBolusForCarbsGrams: ((Double) async -> Decimal)? = nil
+    ) {
         self.dataBridge = dataBridge
         self.commandManager = commandManager
         self.port = port
+        self.recommendBolusForCarbsGrams = recommendBolusForCarbsGrams
     }
 
     deinit { stop() }
@@ -185,7 +194,12 @@ final class PebbleLocalAPIServer {
             return
         }
 
-        let (statusCode, contentType, responseBody) = routeRequest(method: parsed.method, path: parsed.path, body: parsed.body)
+        let (statusCode, contentType, responseBody) = routeRequest(
+            method: parsed.method,
+            path: parsed.path,
+            query: parsed.query,
+            body: parsed.body
+        )
         let response = buildHTTPResponse(statusCode: statusCode, contentType: contentType, body: responseBody)
         let responseData = [UInt8](response.utf8)
         _ = write(clientSocket, responseData, responseData.count)
@@ -194,6 +208,7 @@ final class PebbleLocalAPIServer {
     private struct ParsedHTTPRequest {
         let method: String
         let path: String
+        let query: String?
         let body: String?
     }
 
@@ -220,11 +235,24 @@ final class PebbleLocalAPIServer {
         guard parts.count >= 2 else { return nil }
         let method = parts[0]
         let rawPath = parts[1]
-        let path = rawPath.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? rawPath
-        return ParsedHTTPRequest(method: method, path: path, body: bodyString)
+        let pathParts = rawPath.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
+        let pathSegs = Array(pathParts)
+        let path = pathSegs.isEmpty ? rawPath : String(pathSegs[0])
+        let query: String? = pathSegs.count > 1 ? String(pathSegs[1]) : nil
+        return ParsedHTTPRequest(method: method, path: path, query: query, body: bodyString)
     }
 
-    private func routeRequest(method: String, path: String, body: String?) -> (Int, String, String) {
+    private static func queryParam(_ query: String?, name: String) -> String? {
+        guard let query else { return nil }
+        for pair in query.split(separator: "&") {
+            let kv = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
+            guard kv.count == 2, kv[0] == name else { continue }
+            return kv[1].removingPercentEncoding ?? kv[1]
+        }
+        return nil
+    }
+
+    private func routeRequest(method: String, path: String, query: String?, body: String?) -> (Int, String, String) {
         if method == "GET" {
             switch path {
             case "/":
@@ -235,6 +263,8 @@ final class PebbleLocalAPIServer {
             case "/api/all", "/api/pebble/v1/snapshot":
                 return (200, "application/json", dataBridge.allDataJSON())
             case "/api/commands/pending": return (200, "application/json", commandManager.pendingCommandsJSON())
+            case "/api/pebble/v1/bolus_recommendation":
+                return handleBolusRecommendationGet(query: query)
             case "/health": return (200, "application/json", "{\"status\":\"ok\"}")
             case "/api/pebble/v1/ping":
                 return (200, "application/json", dataBridge.pingJSON())
@@ -286,6 +316,42 @@ final class PebbleLocalAPIServer {
         return nil
     }
 
+    private func handleBolusRecommendationGet(query: String?) -> (Int, String, String) {
+        guard let handler = recommendBolusForCarbsGrams else {
+            return (503, "application/json", "{\"error\":\"recommendation_unavailable\"}")
+        }
+        guard let gramsStr = Self.queryParam(query, name: "grams"),
+              let grams = Double(gramsStr),
+              grams > 0,
+              Decimal(grams) <= commandManager.maxCarbs
+        else {
+            return (400, "application/json", "{\"error\":\"invalid or missing grams (use ?grams=n)\"}")
+        }
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var recommended = Decimal.zero
+        Task {
+            recommended = await handler(grams)
+            semaphore.signal()
+        }
+        let waitResult = semaphore.wait(timeout: .now() + 8)
+        if waitResult == .timedOut {
+            return (504, "application/json", "{\"error\":\"calculation_timeout\"}")
+        }
+
+        let maxU = Double(truncating: NSDecimalNumber(decimal: commandManager.maxBolus))
+        var unitsDouble = Double(truncating: NSDecimalNumber(decimal: Swift.max(Decimal(0), recommended)))
+        unitsDouble = min(unitsDouble, maxU)
+        let tenths = Int((unitsDouble * 10.0).rounded(.toNearestOrAwayFromZero))
+        PebbleIntegrationFileLogger.log(
+            "http_get",
+            "GET /api/pebble/v1/bolus_recommendation grams=\(String(format: "%.0f", grams)) → \(String(format: "%.3f", unitsDouble))U tenths=\(tenths)"
+        )
+        let body =
+            "{\"grams\":\(Int(grams)),\"recommendedUnits\":\(String(format: "%.3f", unitsDouble)),\"recommendedUnitsTenths\":\(tenths)}"
+        return (200, "application/json", body)
+    }
+
     private func handleBolusRequest(_ body: String?) -> (Int, String, String) {
         guard let body = body,
               let data = body.data(using: .utf8),
@@ -300,8 +366,12 @@ final class PebbleLocalAPIServer {
             return (400, "application/json", "{\"error\":\"bolus exceeds safety limits\"}")
         }
 
-        PebbleIntegrationFileLogger.log("http_post", "POST /api/bolus → queued id=\(command.id) units=\(String(format: "%.2f", units))U")
-        return (202, "application/json", "{\"status\":\"pending_confirmation\",\"commandId\":\"\(command.id)\",\"message\":\"Confirm \(String(format: "%.2f", units))U bolus on iPhone\",\"type\":\"bolus\"}")
+        PebbleIntegrationFileLogger.log("http_post", "POST /api/bolus → delivered id=\(command.id) units=\(String(format: "%.2f", units))U")
+        return (
+            200,
+            "application/json",
+            "{\"status\":\"delivered\",\"type\":\"bolus\",\"commandId\":\"\(command.id)\",\"units\":\(String(format: "%.2f", units))}"
+        )
     }
 
     private func handleCarbRequest(_ body: String?) -> (Int, String, String) {
@@ -322,9 +392,13 @@ final class PebbleLocalAPIServer {
 
         PebbleIntegrationFileLogger.log(
             "http_post",
-            "POST /api/carbs → queued id=\(command.id) grams=\(String(format: "%.0f", grams))g absorption=\(String(format: "%.1f", absorptionHours))h"
+            "POST /api/carbs → delivered id=\(command.id) grams=\(String(format: "%.0f", grams))g absorption=\(String(format: "%.1f", absorptionHours))h"
         )
-        return (202, "application/json", "{\"status\":\"pending_confirmation\",\"commandId\":\"\(command.id)\",\"message\":\"Confirm \(String(format: "%.0f", grams))g carbs on iPhone\",\"type\":\"carbEntry\"}")
+        return (
+            200,
+            "application/json",
+            "{\"status\":\"delivered\",\"type\":\"carbEntry\",\"commandId\":\"\(command.id)\",\"grams\":\(String(format: "%.0f", grams))}"
+        )
     }
 
     private func handleConfirmCommand(_ body: String?) -> (Int, String, String) {

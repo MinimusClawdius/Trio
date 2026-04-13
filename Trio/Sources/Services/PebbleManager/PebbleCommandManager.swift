@@ -2,7 +2,7 @@ import Combine
 import Foundation
 
 /// Manages a queue of commands (bolus/carb requests) from the Pebble watch.
-/// Each command requires explicit confirmation on the iPhone before execution.
+/// Commands are **executed immediately** after validation (no iPhone confirmation step).
 ///
 /// All mutations to `pendingCommands` run on the main queue so SwiftUI observes updates
 /// (the Pebble HTTP server handles requests on a background queue).
@@ -41,11 +41,7 @@ final class PebbleCommandManager: ObservableObject {
             pendingCommands.append(command)
             purgeExpired()
             PebbleIntegrationFileLogger.log("pending_queued", "bolus id=\(command.id) units=\(String(format: "%.2f", units))U pending=\(pendingCommands.count)")
-            Foundation.NotificationCenter.default.post(
-                name: Foundation.Notification.Name.pebbleDidEnqueuePendingCommand,
-                object: self,
-                userInfo: ["commandId": command.id]
-            )
+            confirmCommand(command.id)
         }
         return command
     }
@@ -69,11 +65,7 @@ final class PebbleCommandManager: ObservableObject {
                 "pending_queued",
                 "carb id=\(command.id) grams=\(String(format: "%.0f", grams))g absorption=\(String(format: "%.1f", absorptionHours))h pending=\(pendingCommands.count)"
             )
-            Foundation.NotificationCenter.default.post(
-                name: Foundation.Notification.Name.pebbleDidEnqueuePendingCommand,
-                object: self,
-                userInfo: ["commandId": command.id]
-            )
+            confirmCommand(command.id)
         }
         return command
     }
