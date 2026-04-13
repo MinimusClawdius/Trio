@@ -125,7 +125,8 @@ final class PebbleLocalAPIServer {
     }
 
     /// Avoid blocking forever if the client stalls mid-request (loopback only, but keeps the accept loop healthy).
-    private static func setReceiveTimeout(seconds: Int32, socketFD: Int32) {
+    private static func setReceiveTimeout(seconds: Int, socketFD: Int32) {
+        // `timeval.tv_sec` is `__darwin_time_t` (Int) on Apple platforms, not Int32.
         var tv = timeval(tv_sec: seconds, tv_usec: 0)
         _ = setsockopt(socketFD, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
     }
