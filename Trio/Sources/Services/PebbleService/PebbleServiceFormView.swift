@@ -19,6 +19,19 @@ struct PebbleServiceFormView: View {
         (TrioApp.resolver.resolve(PebbleManager.self) as? BasePebbleManager)?.getCommandManager()
     }
 
+    @State private var showPebbleLogShare = false
+    @State private var showNoPebbleLogAlert = false
+
+    private var pebbleLogExportURL: URL? { PebbleIntegrationFileLogger.exportLogFileURL() }
+
+    private var canExportPebbleLog: Bool {
+        guard let url = pebbleLogExportURL,
+              let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let size = attrs[.size] as? NSNumber
+        else { return false }
+        return size.intValue > 0
+    }
+
     var body: some View {
         NavigationStack {
             formContent
@@ -83,8 +96,30 @@ struct PebbleServiceFormView: View {
                 Text(
                     String(
                         localized:
-                        "Bolus and carb entries initiated on the Pebble appear here for confirmation before Trio delivers them.",
+                        "When a bolus or carb arrives from the Pebble, Trio opens a confirmation sheet automatically. You can also review the queue here.",
                         comment: "Pebble service pending requests footer"
+                    )
+                )
+            }
+
+            Section {
+                Button {
+                    if canExportPebbleLog {
+                        showPebbleLogShare = true
+                    } else {
+                        showNoPebbleLogAlert = true
+                    }
+                } label: {
+                    Text(String(localized: "Export Pebble log", comment: "Pebble: share diagnostic log file"))
+                }
+            } header: {
+                Text(String(localized: "Diagnostics", comment: "Pebble service diagnostics section"))
+            } footer: {
+                Text(
+                    String(
+                        localized:
+                        "Writes Pebble queue, HTTP, BLE, confirm/reject, and delivery steps to Trio’s Caches folder as Trio-Pebble-Integration.log (also mirrored to the system log). Export after reproducing an issue to attach in support.",
+                        comment: "Pebble integration file log footer"
                     )
                 )
             }
@@ -103,6 +138,24 @@ struct PebbleServiceFormView: View {
         }
         .navigationTitle(String(localized: "Pebble", comment: "Pebble service navigation title"))
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showPebbleLogShare) {
+            if let url = pebbleLogExportURL {
+                ShareSheet(activityItems: [url])
+            }
+        }
+        .alert(
+            String(localized: "No Pebble log yet", comment: "Pebble log export empty title"),
+            isPresented: $showNoPebbleLogAlert
+        ) {
+            Button(String(localized: "OK", comment: "Generic OK"), role: .cancel) {}
+        } message: {
+            Text(
+                String(
+                    localized: "The log file is empty. Use the Pebble integration, then export again.",
+                    comment: "Pebble log export empty message"
+                )
+            )
+        }
         .onChange(of: service.useNativeBLEPush) { _, _ in
             if mode == .settings {
                 service.persistUpdate()

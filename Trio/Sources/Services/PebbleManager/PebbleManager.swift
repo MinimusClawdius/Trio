@@ -156,10 +156,12 @@ extension BasePebbleManager: PebbleBLEBridgeDelegate {
             let units = Double(amount) / 10.0
             if let cmd = commandManager.queueBolus(units: units) {
                 debug(.service, "PebbleBLE: queued bolus command \(cmd.id) — \(String(format: "%.2f", units))U")
+                PebbleIntegrationFileLogger.log("ble_inbound", "bolus id=\(cmd.id) units=\(String(format: "%.2f", units))U (raw_tenths=\(amount))")
             }
         case 2: // carbs
             if let cmd = commandManager.queueCarbEntry(grams: Double(amount), absorptionHours: 3.0) {
                 debug(.service, "PebbleBLE: queued carb command \(cmd.id) — \(amount)g")
+                PebbleIntegrationFileLogger.log("ble_inbound", "carb id=\(cmd.id) grams=\(Double(amount))g")
             }
         default:
             debug(.service, "PebbleBLE: unknown command type \(type)")

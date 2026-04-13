@@ -107,15 +107,20 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
 
         cmdMgr.executeBolus = { [weak self] amount in
             guard let self = self else { return }
-            guard self.pebbleServiceManager.isPebbleDataDeliveryEnabled else { return }
+            // User already confirmed in-app; do not gate on data-delivery (same toggle as HTTP server, but avoids silent no-op edge cases).
             Task {
-                await self.apsManager.enactBolus(amount: amount, isSMB: false) { _, _ in }
+                await self.apsManager.enactBolus(amount: amount, isSMB: false) { success, message in
+                    if success {
+                        PebbleIntegrationFileLogger.log("enact_bolus", "completed units=\(String(format: "%.2f", amount)) detail=\(message)")
+                    } else {
+                        PebbleIntegrationFileLogger.log("enact_bolus", "failed units=\(String(format: "%.2f", amount)) detail=\(message)")
+                    }
+                }
             }
         }
 
         cmdMgr.executeCarbs = { [weak self] grams, _ in
             guard let self = self else { return }
-            guard self.pebbleServiceManager.isPebbleDataDeliveryEnabled else { return }
             let entry = CarbsEntry(
                 id: UUID().uuidString,
                 createdAt: Date(),
@@ -132,8 +137,10 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
                 do {
                     try await self.carbsStorage.storeCarbs([entry], areFetchedFromRemote: false)
                     debug(.service, "Pebble: stored carb entry \(grams)g via CarbsStorage")
+                    PebbleIntegrationFileLogger.log("store_carbs", "completed grams=\(String(format: "%.0f", grams))g entryId=\(entry.id ?? "")")
                 } catch {
                     debug(.service, "Pebble: error storing carbs: \(error)")
+                    PebbleIntegrationFileLogger.log("store_carbs", "failed grams=\(String(format: "%.0f", grams))g error=\(error.localizedDescription)")
                 }
             }
         }

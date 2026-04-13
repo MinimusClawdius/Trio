@@ -300,6 +300,7 @@ final class PebbleLocalAPIServer {
             return (400, "application/json", "{\"error\":\"bolus exceeds safety limits\"}")
         }
 
+        PebbleIntegrationFileLogger.log("http_post", "POST /api/bolus → queued id=\(command.id) units=\(String(format: "%.2f", units))U")
         return (202, "application/json", "{\"status\":\"pending_confirmation\",\"commandId\":\"\(command.id)\",\"message\":\"Confirm \(String(format: "%.2f", units))U bolus on iPhone\",\"type\":\"bolus\"}")
     }
 
@@ -319,6 +320,10 @@ final class PebbleLocalAPIServer {
             return (400, "application/json", "{\"error\":\"carb amount exceeds safety limits\"}")
         }
 
+        PebbleIntegrationFileLogger.log(
+            "http_post",
+            "POST /api/carbs → queued id=\(command.id) grams=\(String(format: "%.0f", grams))g absorption=\(String(format: "%.1f", absorptionHours))h"
+        )
         return (202, "application/json", "{\"status\":\"pending_confirmation\",\"commandId\":\"\(command.id)\",\"message\":\"Confirm \(String(format: "%.0f", grams))g carbs on iPhone\",\"type\":\"carbEntry\"}")
     }
 
@@ -329,6 +334,7 @@ final class PebbleLocalAPIServer {
               let commandId = json["commandId"] as? String
         else { return (400, "application/json", "{\"error\":\"requires 'commandId'\"}") }
 
+        PebbleIntegrationFileLogger.log("http_post", "POST /api/command/confirm commandId=\(commandId)")
         commandManager.confirmCommand(commandId)
         return (200, "application/json", "{\"status\":\"confirmed\"}")
     }
@@ -340,6 +346,7 @@ final class PebbleLocalAPIServer {
               let commandId = json["commandId"] as? String
         else { return (400, "application/json", "{\"error\":\"requires 'commandId'\"}") }
 
+        PebbleIntegrationFileLogger.log("http_post", "POST /api/command/reject commandId=\(commandId)")
         commandManager.rejectCommand(commandId)
         return (200, "application/json", "{\"status\":\"rejected\"}")
     }

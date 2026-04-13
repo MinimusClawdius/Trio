@@ -7,6 +7,9 @@ import UIKit
 extension Foundation.Notification.Name {
     /// Posted when `PebbleService` persistence or enabled/port flags change; `BasePebbleManager` syncs from `PebbleServiceManager`.
     static let pebbleIntegrationConfigurationDidChange = Foundation.Notification.Name("PebbleIntegrationConfigurationDidChange")
+
+    /// Posted on the main thread when a bolus or carb request is queued for in-app confirmation (`userInfo`: `commandId` String).
+    static let pebbleDidEnqueuePendingCommand = Foundation.Notification.Name("PebbleDidEnqueuePendingCommand")
 }
 
 protocol PebbleServiceManager: AnyObject {

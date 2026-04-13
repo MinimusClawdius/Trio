@@ -300,8 +300,11 @@ final class BaseCarbsStorage: CarbsStorage, Injectable {
             do {
                 guard self.context.hasChanges else { return }
                 try self.context.save()
+                DispatchQueue.main.async {
+                    self.updateSubject.send(())
+                }
             } catch {
-                print(error.localizedDescription)
+                debug(.default, "CarbsStorage: saveCarbsToCoreData failed: \(error.localizedDescription)")
             }
         }
     }

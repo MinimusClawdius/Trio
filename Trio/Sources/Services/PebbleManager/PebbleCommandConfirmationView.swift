@@ -77,3 +77,41 @@ struct PebbleCommandConfirmationView: View {
         .padding(.vertical, 4)
     }
 }
+
+/// Presents **Pebble Requests** as a sheet whenever a new bolus/carb is queued (HTTP or BLE), so confirmation is not buried in Settings.
+struct PebblePendingCommandsGlobalPresenter: ViewModifier {
+    @State private var showPendingSheet = false
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .pebbleDidEnqueuePendingCommand)) { _ in
+                guard let pebbleSvc = TrioApp.resolver.resolve(PebbleServiceManager.self),
+                      pebbleSvc.isPebbleDataDeliveryEnabled
+                else { return }
+                guard (TrioApp.resolver.resolve(PebbleManager.self) as? BasePebbleManager)?.getCommandManager()
+                    .pendingCommands.isEmpty == false
+                else { return }
+                PebbleIntegrationFileLogger.log("ui_sheet", "presenting Pebble pending requests sheet")
+                showPendingSheet = true
+            }
+            .sheet(isPresented: $showPendingSheet) {
+                Group {
+                    if let cmdMgr = (TrioApp.resolver.resolve(PebbleManager.self) as? BasePebbleManager)?.getCommandManager() {
+                        NavigationStack {
+                            PebbleCommandConfirmationView(commandManager: cmdMgr)
+                                .toolbar {
+                                    ToolbarItem(placement: .cancellationAction) {
+                                        Button(String(localized: "Close", comment: "Dismiss Pebble pending sheet")) {
+                                            showPendingSheet = false
+                                        }
+                                    }
+                                }
+                        }
+                    } else {
+                        Text(String(localized: "Pebble is unavailable.", comment: "Pebble sheet error"))
+                            .padding()
+                    }
+                }
+            }
+    }
+}
