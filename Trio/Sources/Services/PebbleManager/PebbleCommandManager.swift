@@ -41,8 +41,8 @@ final class PebbleCommandManager: ObservableObject {
             pendingCommands.append(command)
             purgeExpired()
             PebbleIntegrationFileLogger.log("pending_queued", "bolus id=\(command.id) units=\(String(format: "%.2f", units))U pending=\(pendingCommands.count)")
-            NotificationCenter.default.post(
-                name: .pebbleDidEnqueuePendingCommand,
+            Foundation.NotificationCenter.default.post(
+                name: Foundation.Notification.Name.pebbleDidEnqueuePendingCommand,
                 object: self,
                 userInfo: ["commandId": command.id]
             )
@@ -69,8 +69,8 @@ final class PebbleCommandManager: ObservableObject {
                 "pending_queued",
                 "carb id=\(command.id) grams=\(String(format: "%.0f", grams))g absorption=\(String(format: "%.1f", absorptionHours))h pending=\(pendingCommands.count)"
             )
-            NotificationCenter.default.post(
-                name: .pebbleDidEnqueuePendingCommand,
+            Foundation.NotificationCenter.default.post(
+                name: Foundation.Notification.Name.pebbleDidEnqueuePendingCommand,
                 object: self,
                 userInfo: ["commandId": command.id]
             )

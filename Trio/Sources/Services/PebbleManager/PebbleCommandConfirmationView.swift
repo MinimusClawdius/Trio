@@ -84,7 +84,7 @@ struct PebblePendingCommandsGlobalPresenter: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .onReceive(NotificationCenter.default.publisher(for: .pebbleDidEnqueuePendingCommand)) { _ in
+            .onReceive(Foundation.NotificationCenter.default.publisher(for: Foundation.Notification.Name.pebbleDidEnqueuePendingCommand)) { _ in
                 guard let pebbleSvc = TrioApp.resolver.resolve(PebbleServiceManager.self),
                       pebbleSvc.isPebbleDataDeliveryEnabled
                 else { return }
