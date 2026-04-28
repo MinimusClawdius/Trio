@@ -34,6 +34,9 @@ final class PebbleBLEBridge: NSObject {
 
     weak var delegate: PebbleBLEBridgeDelegate?
 
+    /// Command status feedback sender. Set by BasePebbleManager when command manager is available.
+    var sendCommandStatus: ((String, String) -> Void)?
+
     private(set) var isConnected = false
     private(set) var isRunning = false
 
@@ -115,6 +118,28 @@ final class PebbleBLEBridge: NSObject {
         }
     }
 
+    /// Send a command status message back to the watch.
+    /// Used to confirm command execution from Trio to Pebble.
+    func sendCommandStatus(_ status: String) {
+        guard isRunning, isConnected, let watch = connectedWatch else { return }
+
+        lock.lock()
+        let dict = NSMutableDictionary()
+        let K = PebbleAppMessageKey.self
+        dict[K.cmdStatus.nsKey] = status.prefix(63) as NSString
+        // PebbleKit declares `-[PBWatch appMessagesPushUpdate:withUUID:onSent:]` as `[NSNumber: Any]` in Swift.
+        let payload = dict as NSDictionary as! [NSNumber: Any]
+        lock.unlock()
+
+        watch.appMessagesPushUpdate(payload) { _, _, error in
+            if let error = error {
+                debug(.service, "PebbleBLE: send command status failed — \(error.localizedDescription)")
+            } else {
+                debug(.service, "PebbleBLE: sent command status to watch: \(status)")
+            }
+        }
+    }
+
     // MARK: Connection
 
     private func watchDidConnect(_ watch: PBWatch) {
@@ -158,6 +183,12 @@ final class PebbleBLEBridge: NSObject {
            let amountNum = update[cmdAmountKey] as? NSNumber
         {
             delegate?.pebbleBLE(didReceiveCommand: typeNum.intValue, amount: amountNum.intValue)
+        }
+
+        // Also handle command status confirmation from watch (for remote app)
+        let cmdStatusKey = PebbleAppMessageKey.cmdStatus.nsKey
+        if let statusStr = update[cmdStatusKey] as? String {
+            sendCommandStatus?(statusStr, "watch_ack")
         }
     }
 

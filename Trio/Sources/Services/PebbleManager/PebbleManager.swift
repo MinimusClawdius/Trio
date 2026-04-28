@@ -79,6 +79,15 @@ final class BasePebbleManager: PebbleManager, Injectable {
     func start() {
         guard !isRunning else { return }
 
+        // Wire command status callback to send via BLE bridge
+        commandManager.onCommandComplete = { [weak self] commandId, success, message in
+            guard let self else { return }
+            let status = success
+                ? "Sent: \(message ?? "")"
+                : "Failed: \(message ?? "Error")"
+            self.bleBridge.sendCommandStatus(status)
+        }
+
         // HTTP server — PebbleKit JS primary transport
         let server = PebbleLocalAPIServer(
             dataBridge: dataBridge,

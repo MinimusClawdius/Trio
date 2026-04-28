@@ -11,6 +11,8 @@ final class PebbleCommandManager: ObservableObject {
 
     var executeBolus: ((Double) -> Void)?
     var executeCarbs: ((Double, Double) -> Void)?
+    /// Callback when a command completes (success or failure). Called on main queue.
+    var onCommandComplete: ((String, Bool, String?) -> Void)?
 
     var maxBolus: Decimal = 10.0
     var maxCarbs: Decimal = 250.0
@@ -89,20 +91,24 @@ final class PebbleCommandManager: ObservableObject {
                 guard let units = command.bolusUnits else {
                     debug(.service, "Pebble: bolus command missing units")
                     PebbleIntegrationFileLogger.log("confirm_failed", "id=\(commandId) reason=missing_units")
+                    self?.notifyCommandComplete(commandId, success: false, message: "Missing units")
                     return
                 }
                 guard let runBolus = executeBolus else {
                     debug(.service, "Pebble: executeBolus not wired — carb/bolus handlers are set in AppleWatchManager; check app launch / DI.")
                     PebbleIntegrationFileLogger.log("confirm_failed", "id=\(commandId) reason=executeBolus_nil")
+                    self?.notifyCommandComplete(commandId, success: false, message: "Handler not configured")
                     return
                 }
                 debug(.service, "Pebble: executing confirmed bolus of \(String(format: "%.2f", units))U")
                 PebbleIntegrationFileLogger.log("confirm_execute", "bolus id=\(commandId) units=\(String(format: "%.2f", units))U")
                 runBolus(units)
+                self?.notifyCommandComplete(commandId, success: true, message: "Bolus sent")
             case .carbEntry:
                 guard let grams = command.carbGrams, grams > 0 else {
                     debug(.service, "Pebble: carb command missing grams")
                     PebbleIntegrationFileLogger.log("confirm_failed", "id=\(commandId) reason=missing_grams")
+                    self?.notifyCommandComplete(commandId, success: false, message: "Missing grams")
                     return
                 }
                 // Do not require absorptionHours: older queued commands or edge paths may omit it.
@@ -110,6 +116,7 @@ final class PebbleCommandManager: ObservableObject {
                 guard let runCarbs = executeCarbs else {
                     debug(.service, "Pebble: executeCarbs not wired — carb/bolus handlers are set in AppleWatchManager; check app launch / DI.")
                     PebbleIntegrationFileLogger.log("confirm_failed", "id=\(commandId) reason=executeCarbs_nil")
+                    self?.notifyCommandComplete(commandId, success: false, message: "Handler not configured")
                     return
                 }
                 debug(.service, "Pebble: executing confirmed carb entry of \(String(format: "%.0f", grams))g (absorption \(String(format: "%.1f", hours))h)")
@@ -118,7 +125,14 @@ final class PebbleCommandManager: ObservableObject {
                     "carb id=\(commandId) grams=\(String(format: "%.0f", grams))g absorption=\(String(format: "%.1f", hours))h"
                 )
                 runCarbs(grams, hours)
+                self?.notifyCommandComplete(commandId, success: true, message: "Carbs saved")
             }
+        }
+    }
+
+    private func notifyCommandComplete(_ commandId: String, success: Bool, message: String?) {
+        performOnMainSync {
+            self.onCommandComplete?(commandId, success, message)
         }
     }
 
@@ -127,6 +141,7 @@ final class PebbleCommandManager: ObservableObject {
             pendingCommands.removeAll { $0.id == commandId }
             debug(.service, "Pebble: rejected command \(commandId)")
             PebbleIntegrationFileLogger.log("rejected", "id=\(commandId) pending_remaining=\(pendingCommands.count)")
+            self.onCommandComplete?(commandId, false, "Rejected")
         }
     }
 
