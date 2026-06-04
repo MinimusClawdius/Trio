@@ -85,6 +85,25 @@ struct PebbleServiceFormView: View {
                                 .font(.callout)
                         }
                     }
+                    HStack {
+                        Text("Native BLE Push")
+                        Spacer()
+                        if mgr.useNativeBLEPush {
+                            if mgr.isBLEConnected {
+                                Text("Connected")
+                                    .foregroundStyle(.green)
+                                    .font(.callout)
+                            } else {
+                                Text("Enabled (searching)")
+                                    .foregroundStyle(.orange)
+                                    .font(.callout)
+                            }
+                        } else {
+                            Text("Disabled")
+                                .foregroundStyle(.secondary)
+                                .font(.callout)
+                        }
+                    }
                 }
             } header: {
                 Text(String(localized: "Connection", comment: "Pebble service section header"))

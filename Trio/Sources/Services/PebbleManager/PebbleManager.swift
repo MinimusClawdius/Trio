@@ -8,7 +8,7 @@ protocol PebbleManager {
     var isEnabled: Bool { get set }
     var isRunning: Bool { get }
     var isBLEConnected: Bool { get }
-    /// Trio's optional native PebbleKit iOS AppMessage push. **Off by default** — PebbleKit JS polling `127.0.0.1` is the supported primary pipe.
+    /// Trio's native PebbleKit iOS AppMessage push. **Preferred** for data delivery; falls back to HTTP.
     var useNativeBLEPush: Bool { get set }
     func start()
     func stop()

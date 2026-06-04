@@ -73,6 +73,7 @@ final class PebbleBLEBridge: NSObject {
         }
 
         isRunning = true
+        PebbleIntegrationFileLogger.log("ble_bridge", "started — looking for Pebble watch (UUID=(Self.watchfaceUUIDString))")
         debug(.service, "PebbleBLE: started — looking for Pebble watch")
     }
 
