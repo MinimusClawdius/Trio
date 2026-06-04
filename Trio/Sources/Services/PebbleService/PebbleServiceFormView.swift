@@ -16,6 +16,9 @@ struct PebbleServiceFormView: View {
 
     /// Never substitute a throwaway manager — it would not match the instance wired to `PebbleLocalAPIServer`.
     private var pebbleCommandManager: PebbleCommandManager? {
+    private var basePebbleManager: BasePebbleManager? {
+        TrioApp.resolver.resolve(PebbleManager.self) as? BasePebbleManager
+    }
         (TrioApp.resolver.resolve(PebbleManager.self) as? BasePebbleManager)?.getCommandManager()
     }
 
@@ -66,6 +69,22 @@ struct PebbleServiceFormView: View {
                     .keyboardType(.numberPad)
                     .multilineTextAlignment(.trailing)
                     .frame(maxWidth: 80)
+                }
+
+                if let mgr = basePebbleManager {
+                    HStack {
+                        Text("HTTP Server")
+                        Spacer()
+                        if mgr.httpServerRunning {
+                            Text("Running")
+                                .foregroundStyle(.green)
+                                .font(.callout)
+                        } else {
+                            Text("Stopped")
+                                .foregroundStyle(.secondary)
+                                .font(.callout)
+                        }
+                    }
                 }
             } header: {
                 Text(String(localized: "Connection", comment: "Pebble service section header"))

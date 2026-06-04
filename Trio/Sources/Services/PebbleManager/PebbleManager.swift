@@ -28,6 +28,7 @@ final class BasePebbleManager: PebbleManager, Injectable {
     @Injected() private var bolusCalculationManager: BolusCalculationManager!
     @Injected() private var apsManager: APSManager!
     @Injected() private var determinationStorage: DeterminationStorage!
+    @Injected() private var carbsStorage: CarbsStorage!
 
     @Persisted(key: "BasePebbleManager.isEnabled") var isEnabled: Bool = false {
         didSet {
@@ -40,6 +41,7 @@ final class BasePebbleManager: PebbleManager, Injectable {
     private(set) var isRunning = false
 
     var isBLEConnected: Bool { bleBridge.isConnected }
+    var httpServerRunning: Bool { apiServer?.isServerRunning ?? false }
 
     /// Persisted only via `PebbleService` when onboarded; otherwise stays `false`.
     var useNativeBLEPush: Bool = false
@@ -50,6 +52,47 @@ final class BasePebbleManager: PebbleManager, Injectable {
     init(resolver: Resolver) {
         injectServices(resolver)
         bleBridge.delegate = self
+
+        // Wire remote command execution closures here (independent of AppleWatchManager so pebble remote works even without Apple Watch or in certain launch orders)
+        commandManager.maxBolus = 10.0
+        commandManager.maxCarbs = 200.0
+        commandManager.executeBolus = { [weak self] amount in
+            guard let self = self else { return }
+            Task {
+                await self.apsManager.enactBolus(amount: amount, isSMB: false) { success, message in
+                    if success {
+                        PebbleIntegrationFileLogger.log("enact_bolus", "completed units=\(String(format: "%.2f", amount)) detail=\(message)")
+                    } else {
+                        PebbleIntegrationFileLogger.log("enact_bolus", "failed units=\(String(format: "%.2f", amount)) detail=\(message)")
+                    }
+                }
+            }
+        }
+        commandManager.executeCarbs = { [weak self] grams, _ in
+            guard let self = self else { return }
+            let entry = CarbsEntry(
+                id: UUID().uuidString,
+                createdAt: Date(),
+                actualDate: nil,
+                carbs: Decimal(grams),
+                fat: nil,
+                protein: nil,
+                note: "Via Pebble",
+                enteredBy: "Pebble",
+                isFPU: false,
+                fpuID: nil
+            )
+            Task {
+                do {
+                    try await self.carbsStorage.storeCarbs([entry], areFetchedFromRemote: false)
+                    debug(.service, "Pebble: stored carb entry \(grams)g via CarbsStorage")
+                    PebbleIntegrationFileLogger.log("store_carbs", "completed grams=\(String(format: "%.0f", grams))g")
+                } catch {
+                    debug(.service, "Pebble: error storing carbs: \(error)")
+                    PebbleIntegrationFileLogger.log("store_carbs", "failed grams=\(String(format: "%.0f", grams))g error=\(error.localizedDescription)")
+                }
+            }
+        }
         pebbleIntegrationConfigObserver = Foundation.NotificationCenter.default.addObserver(
             forName: .pebbleIntegrationConfigurationDidChange,
             object: nil,

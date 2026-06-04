@@ -25,6 +25,9 @@ final class PebbleLocalAPIServer {
 
     private var serverSocket: Int32 = -1
     private var isRunning = false
+
+    /// Public read-only status for UI
+    var isServerRunning: Bool { isRunning }
     private let port: UInt16
     private let dataBridge: PebbleDataBridge
     private let commandManager: PebbleCommandManager
@@ -59,7 +62,11 @@ final class PebbleLocalAPIServer {
     }
 
     func start() {
-        guard !isRunning else { return }
+        guard !isRunning else {
+            PebbleIntegrationFileLogger.log("http_server", "start() called but already running on port \(port)")
+            return
+        }
+        PebbleIntegrationFileLogger.log("http_server", "start() called — launching server on port \(port)")
         DispatchQueue.global(qos: .background).async { [weak self] in
             self?.runServer()
         }
@@ -71,11 +78,15 @@ final class PebbleLocalAPIServer {
             close(serverSocket)
             serverSocket = -1
         }
+        PebbleIntegrationFileLogger.log("http_server", "stop() called — server halted on port \(port)")
     }
 
     private func runServer() {
+        PebbleIntegrationFileLogger.log("http_server", "runServer() thread started — creating socket for port \(port)")
+
         serverSocket = socket(AF_INET, SOCK_STREAM, 0)
         guard serverSocket >= 0 else {
+            PebbleIntegrationFileLogger.log("http_server", "FATAL: socket() failed — cannot create server socket")
             debug(.service, "Pebble: failed to create socket")
             return
         }
@@ -88,6 +99,8 @@ final class PebbleLocalAPIServer {
         addr.sin_port = port.bigEndian
         addr.sin_addr.s_addr = inet_addr("127.0.0.1")
 
+        PebbleIntegrationFileLogger.log("http_server", "attempting bind to 127.0.0.1:\(port)")
+
         let bindResult = withUnsafePointer(to: &addr) { ptr in
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
                 bind(serverSocket, sa, socklen_t(MemoryLayout<sockaddr_in>.size))
@@ -95,18 +108,23 @@ final class PebbleLocalAPIServer {
         }
 
         guard bindResult == 0 else {
+            PebbleIntegrationFileLogger.log("http_server", "FATAL: bind() failed on port \(port) — address in use or permission denied")
             debug(.service, "Pebble: failed to bind to port \(port)")
             close(serverSocket)
             return
         }
 
+        PebbleIntegrationFileLogger.log("http_server", "bind successful on 127.0.0.1:\(port)")
+
         guard listen(serverSocket, 5) == 0 else {
+            PebbleIntegrationFileLogger.log("http_server", "FATAL: listen() failed on port \(port)")
             debug(.service, "Pebble: failed to listen")
             close(serverSocket)
             return
         }
 
         isRunning = true
+        PebbleIntegrationFileLogger.log("http_server", "SUCCESS: HTTP server listening on http://127.0.0.1:\(port) — ready for Rebble / browser requests")
         debug(.service, "Pebble: API server started on http://127.0.0.1:\(port)")
 
         while isRunning {
@@ -304,7 +322,7 @@ final class PebbleLocalAPIServer {
         <li><a href="/api/all"><code>/api/all</code></a> — combined JSON (same as <code>/api/pebble/v1/snapshot</code>)</li>
         <li><a href="/api/pebble/v1/snapshot"><code>/api/pebble/v1/snapshot</code></a> — versioned Pebble snapshot</li>
         </ul>
-        <p style="color:#666;font-size:0.9rem;">Use Safari <em>on this device</em>; another computer’s browser cannot reach <code>127.0.0.1</code> here.</p>
+        <p style="color:#666;font-size:0.9rem;">Use Safari <em>on this device</em>; another computer's browser cannot reach <code>127.0.0.1</code> here.</p>
         </body></html>
         """
     }
@@ -347,58 +365,43 @@ final class PebbleLocalAPIServer {
             "http_get",
             "GET /api/pebble/v1/bolus_recommendation grams=\(String(format: "%.0f", grams)) → \(String(format: "%.3f", unitsDouble))U tenths=\(tenths)"
         )
-        let body =
-            "{\"grams\":\(Int(grams)),\"recommendedUnits\":\(String(format: "%.3f", unitsDouble)),\"recommendedUnitsTenths\":\(tenths)}"
-        return (200, "application/json", body)
+
+        return (200, "application/json", "{\"units\":\(unitsDouble),\"tenths\":\(tenths)}")
     }
 
     private func handleBolusRequest(_ body: String?) -> (Int, String, String) {
         guard let body = body,
               let data = body.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let units = jsonDouble(json, key: "units")
+              let units = jsonDouble(json, key: "units") ?? jsonDouble(json, key: "bolusUnits")
         else {
-            debug(.service, "Pebble HTTP: /api/bolus rejected — missing body or invalid JSON")
-            return (400, "application/json", "{\"error\":\"invalid request, requires 'units'\"}")
+            return (400, "application/json", "{\"error\":\"invalid bolus payload\"}")
         }
 
-        guard let command = commandManager.queueBolus(units: units) else {
-            return (400, "application/json", "{\"error\":\"bolus exceeds safety limits\"}")
+        guard let cmd = commandManager.queueBolus(units: units) else {
+            return (400, "application/json", "{\"error\":\"bolus rejected (invalid or exceeds max)\"}")
         }
 
-        PebbleIntegrationFileLogger.log("http_post", "POST /api/bolus → delivered id=\(command.id) units=\(String(format: "%.2f", units))U")
-        return (
-            200,
-            "application/json",
-            "{\"status\":\"delivered\",\"type\":\"bolus\",\"commandId\":\"\(command.id)\",\"units\":\(String(format: "%.2f", units))}"
-        )
+        PebbleIntegrationFileLogger.log("http_post", "POST /api/bolus → queued id=\(cmd.id) units=\(String(format: "%.2f", units))U")
+        return (200, "application/json", "{\"status\":\"queued\",\"id\":\"\(cmd.id)\"}")
     }
 
     private func handleCarbRequest(_ body: String?) -> (Int, String, String) {
         guard let body = body,
               let data = body.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let grams = jsonDouble(json, key: "grams")
+              let grams = jsonDouble(json, key: "grams") ?? jsonDouble(json, key: "carbGrams")
         else {
-            debug(.service, "Pebble HTTP: /api/carbs rejected — missing body or invalid JSON")
-            return (400, "application/json", "{\"error\":\"invalid request, requires 'grams'\"}")
+            return (400, "application/json", "{\"error\":\"invalid carbs payload\"}")
+        }
+        let hours = jsonDouble(json, key: "absorptionHours") ?? 3.0
+
+        guard let cmd = commandManager.queueCarbEntry(grams: grams, absorptionHours: hours) else {
+            return (400, "application/json", "{\"error\":\"carb entry rejected (invalid or exceeds max)\"}")
         }
 
-        let absorptionHours = jsonDouble(json, key: "absorptionHours") ?? 3.0
-
-        guard let command = commandManager.queueCarbEntry(grams: grams, absorptionHours: absorptionHours) else {
-            return (400, "application/json", "{\"error\":\"carb amount exceeds safety limits\"}")
-        }
-
-        PebbleIntegrationFileLogger.log(
-            "http_post",
-            "POST /api/carbs → delivered id=\(command.id) grams=\(String(format: "%.0f", grams))g absorption=\(String(format: "%.1f", absorptionHours))h"
-        )
-        return (
-            200,
-            "application/json",
-            "{\"status\":\"delivered\",\"type\":\"carbEntry\",\"commandId\":\"\(command.id)\",\"grams\":\(String(format: "%.0f", grams))}"
-        )
+        PebbleIntegrationFileLogger.log("http_post", "POST /api/carbs → queued id=\(cmd.id) grams=\(String(format: "%.0f", grams))g absorption=\(String(format: "%.1f", hours))h")
+        return (200, "application/json", "{\"status\":\"queued\",\"id\":\"\(cmd.id)\"}")
     }
 
     private func handleConfirmCommand(_ body: String?) -> (Int, String, String) {
@@ -406,11 +409,13 @@ final class PebbleLocalAPIServer {
               let data = body.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let commandId = json["commandId"] as? String
-        else { return (400, "application/json", "{\"error\":\"requires 'commandId'\"}") }
+        else {
+            return (400, "application/json", "{\"error\":\"missing commandId\"}")
+        }
 
         PebbleIntegrationFileLogger.log("http_post", "POST /api/command/confirm commandId=\(commandId)")
         commandManager.confirmCommand(commandId)
-        return (200, "application/json", "{\"status\":\"confirmed\"}")
+        return (200, "application/json", "{\"status\":\"ok\"}")
     }
 
     private func handleRejectCommand(_ body: String?) -> (Int, String, String) {
@@ -418,22 +423,36 @@ final class PebbleLocalAPIServer {
               let data = body.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let commandId = json["commandId"] as? String
-        else { return (400, "application/json", "{\"error\":\"requires 'commandId'\"}") }
+        else {
+            return (400, "application/json", "{\"error\":\"missing commandId\"}")
+        }
 
         PebbleIntegrationFileLogger.log("http_post", "POST /api/command/reject commandId=\(commandId)")
         commandManager.rejectCommand(commandId)
-        return (200, "application/json", "{\"status\":\"rejected\"}")
+        return (200, "application/json", "{\"status\":\"ok\"}")
     }
 
     private func buildHTTPResponse(statusCode: Int, contentType: String, body: String) -> String {
-        let statusText: String
-        switch statusCode {
-        case 200: statusText = "OK"
-        case 202: statusText = "Accepted"
-        case 400: statusText = "Bad Request"
-        case 404: statusText = "Not Found"
-        default: statusText = "Error"
+        let bodyData = body.data(using: .utf8) ?? Data()
+        return """
+        HTTP/1.1 \(statusCode) \(statusText(for: statusCode))\r
+        Content-Type: \(contentType)\r
+        Content-Length: \(bodyData.count)\r
+        Connection: close\r
+        \r
+        \(body)
+        """
+    }
+
+    private func statusText(for code: Int) -> String {
+        switch code {
+        case 200: return "OK"
+        case 400: return "Bad Request"
+        case 404: return "Not Found"
+        case 405: return "Method Not Allowed"
+        case 503: return "Service Unavailable"
+        case 504: return "Gateway Timeout"
+        default: return "Error"
         }
-        return "HTTP/1.1 \(statusCode) \(statusText)\r\nContent-Type: \(contentType)\r\nContent-Length: \(body.utf8.count)\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n\(body)"
     }
 }
