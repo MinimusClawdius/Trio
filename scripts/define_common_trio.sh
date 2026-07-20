@@ -17,8 +17,8 @@
 #
 # The scrips in LoopWorkspace are used to update translations and make
 #   sure the loopandlearn branches are up to date
-# Even though MedtrumKit and EversenseKit are not yet part of dev
-#   it does no harm to update those repositories using this script
+# Even though EversenseKit is only found in a feature branch
+#   it does no harm to update extra repositories using this script
 TRIO_PROJECTS=( \
     loopandlearn:LoopKit:trio \
     loopandlearn:CGMBLEKit:dev \
@@ -26,11 +26,9 @@ TRIO_PROJECTS=( \
     loopandlearn:G7SensorKit:main \
     loopandlearn:LibreTransmitter:main \
     loopandlearn:MinimedKit:main \
-    loopandlearn:OmniBLE:dev \
-    loopandlearn:OmniKit:main \
     loopandlearn:RileyLinkKit:dev \
     loopandlearn:TidepoolService:dev \
     loopandlearn:DanaKit:dev \
-    loopandlearn:EversenseKit:dev \
     loopandlearn:MedtrumKit:dev \
+    loopandlearn:EversenseKit:dev \
 )
