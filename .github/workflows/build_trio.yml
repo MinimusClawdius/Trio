@@ -94,38 +94,10 @@ jobs:
         with:
           token: ${{ secrets.GH_PAT }}
 
-      # This syncs any target branch to upstream branch of the same name
-      - name: Sync upstream changes
-        if: | # do not run the upstream sync action on the upstream repository
-          steps.workflow-permission.outputs.has_permission == 'true' &&
-          vars.SCHEDULED_SYNC != 'false' && github.repository_owner != 'nightscout'
-        id: sync
-        uses: aormsby/Fork-Sync-With-Upstream-action@v3.4.2
-        with:
-          target_sync_branch: ${{ env.TARGET_BRANCH }}
-          shallow_since: 6 months ago
-          target_repo_token: ${{ secrets.GH_PAT }}
-          upstream_sync_branch: ${{ env.UPSTREAM_BRANCH }}
-          upstream_sync_repo: ${{ env.UPSTREAM_REPO }}
-
-      # Display a sample message based on the sync output var 'has_new_commits'
-      - name: New commits found
-        if: |
-          steps.workflow-permission.outputs.has_permission == 'true' &&
-          vars.SCHEDULED_SYNC != 'false' && steps.sync.outputs.has_new_commits == 'true'
-        run: echo "New commits were found to sync."
-
-      - name: No new commits
-        if: |
-          steps.workflow-permission.outputs.has_permission == 'true' &&
-          vars.SCHEDULED_SYNC != 'false' && steps.sync.outputs.has_new_commits == 'false'
-        run: echo "There were no new commits."
-
-      - name: Show value of 'has_new_commits'
-        if: steps.workflow-permission.outputs.has_permission == 'true' && vars.SCHEDULED_SYNC != 'false'
-        run: |
-          echo ${{ steps.sync.outputs.has_new_commits }}
-          echo "NEW_COMMITS=${{ steps.sync.outputs.has_new_commits }}" >> $GITHUB_OUTPUT
+      # Upstream sync is DISABLED for this private fork.
+      # Use ./scripts/update-from-nightscout.sh locally instead.
+      # The Fork-Sync-With-Upstream-action has been removed because it
+      # cannot resolve merge conflicts caused by our private changes.
 
       - name: Show scheduled build configuration message
         if: steps.workflow-permission.outputs.has_permission != 'true'
