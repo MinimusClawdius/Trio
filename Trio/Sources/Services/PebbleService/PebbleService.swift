@@ -20,7 +20,7 @@ final class PebbleService: Service, ObservableObject {
 
     @Published var isEnabled: Bool
     @Published var httpPort: UInt16
-    /// Native PebbleKit iOS BLE data push — **on by default** for reliable data delivery.
+    /// Native PebbleKit iOS BLE data push — experimental; **off by default** (JS + HTTP is primary).
     @Published var useNativeBLEPush: Bool
     private(set) var isOnboarded: Bool
 
@@ -28,7 +28,7 @@ final class PebbleService: Service, ObservableObject {
         id = UUID().uuidString
         isEnabled = true
         httpPort = 8080
-        useNativeBLEPush = true
+        useNativeBLEPush = false
         isOnboarded = false
     }
 

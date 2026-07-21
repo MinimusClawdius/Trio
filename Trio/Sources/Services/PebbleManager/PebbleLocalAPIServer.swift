@@ -16,23 +16,31 @@ import Glibc
 ///
 /// **Not the same as Garmin:** `GarminManager` uses Garmin Connect IQ to send messages to the
 /// watch while Trio is active. This server answers HTTP **pull** requests on loopback. iOS will
-/// **suspend** Trio when another app is frontmost, so Safari/Rebble cannot rely on this URL staying
-/// reachable indefinitely — only a ~25s background extension is started per accepted connection.
+/// **suspend** Trio when another app is frontmost; we (1) extend background time on each accept,
+/// (2) hold a rolling keep-alive background task while the server is enabled, and (3) auto-restart
+/// the accept loop if the socket dies. Full suspension can still drop loopback until Trio wakes.
 final class PebbleLocalAPIServer {
     private static let headerSeparator = Data("\r\n\r\n".utf8)
     /// Cap total request size (headers + body) to avoid unbounded reads.
     private static let maxRequestBytes = 512 * 1024
 
     private var serverSocket: Int32 = -1
-    private var isRunning = false
-
-    /// Public read-only status for UI
-    var isServerRunning: Bool { isRunning }
+    /// Desired run state (set by start/stop). Accept loop may exit while this stays true → restart.
+    private var shouldRun = false
+    /// True while accept loop is active and listening.
+    private(set) var isListening = false
+    /// Public read-only status for Settings UI (maps to live accept loop, not just desired state).
+    var isServerRunning: Bool { isListening }
     private let port: UInt16
     private let dataBridge: PebbleDataBridge
     private let commandManager: PebbleCommandManager
     /// Optional carb → bolus recommendation (same engine as Apple Watch); used by `GET /api/pebble/v1/bolus_recommendation`.
     private let recommendBolusForCarbsGrams: ((Double) async -> Decimal)?
+    private let lifecycleQueue = DispatchQueue(label: "trio.pebble.http.lifecycle")
+    private var restartWorkItem: DispatchWorkItem?
+    private var keepAliveTaskID: UIBackgroundTaskIdentifier = .invalid
+    private var keepAliveTimer: DispatchSourceTimer?
+    private var lifecycleObservers: [NSObjectProtocol] = []
 
     init(
         dataBridge: PebbleDataBridge,
@@ -62,93 +70,263 @@ final class PebbleLocalAPIServer {
     }
 
     func start() {
-        guard !isRunning else {
-            PebbleIntegrationFileLogger.log("http_server", "start() called but already running on port \(port)")
-            return
-        }
-        PebbleIntegrationFileLogger.log("http_server", "start() called — launching server on port \(port)")
-        DispatchQueue.global(qos: .background).async { [weak self] in
-            self?.runServer()
+        lifecycleQueue.async { [weak self] in
+            guard let self else { return }
+            self.shouldRun = true
+            self.installLifecycleObserversIfNeeded()
+            self.startKeepAliveIfNeeded()
+            guard !self.isListening else { return }
+            self.launchAcceptLoop()
         }
     }
 
     func stop() {
-        isRunning = false
-        if serverSocket >= 0 {
-            close(serverSocket)
-            serverSocket = -1
+        lifecycleQueue.async { [weak self] in
+            guard let self else { return }
+            self.shouldRun = false
+            self.restartWorkItem?.cancel()
+            self.restartWorkItem = nil
+            self.teardownKeepAlive()
+            self.removeLifecycleObservers()
+            self.isListening = false
+            if self.serverSocket >= 0 {
+                close(self.serverSocket)
+                self.serverSocket = -1
+            }
         }
-        PebbleIntegrationFileLogger.log("http_server", "stop() called — server halted on port \(port)")
+    }
+
+    /// Call when Trio returns to foreground or after pump/CGM wake — restarts socket if it died.
+    func ensureListening() {
+        lifecycleQueue.async { [weak self] in
+            guard let self, self.shouldRun else { return }
+            self.startKeepAliveIfNeeded()
+            if !self.isListening {
+                debug(.service, "Pebble: ensureListening — accept loop down, restarting on :\(self.port)")
+                self.launchAcceptLoop()
+            }
+        }
+    }
+
+    private func launchAcceptLoop() {
+        // Always off lifecycleQueue to avoid blocking start/stop.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            self?.runServer()
+        }
+    }
+
+    private func scheduleRestart(after seconds: Double) {
+        lifecycleQueue.async { [weak self] in
+            guard let self, self.shouldRun else { return }
+            self.restartWorkItem?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.lifecycleQueue.async {
+                    guard self.shouldRun, !self.isListening else { return }
+                    debug(.service, "Pebble: retrying HTTP server bind on :\(self.port)")
+                    self.launchAcceptLoop()
+                }
+            }
+            self.restartWorkItem = work
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + seconds, execute: work)
+        }
+    }
+
+    private func installLifecycleObserversIfNeeded() {
+        guard lifecycleObservers.isEmpty else { return }
+        let center = Foundation.NotificationCenter.default
+        let names: [NSNotification.Name] = [
+            UIApplication.didBecomeActiveNotification,
+            UIApplication.willEnterForegroundNotification,
+            UIApplication.didEnterBackgroundNotification
+        ]
+        for name in names {
+            let token = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+                guard let self else { return }
+                if note.name == UIApplication.didEnterBackgroundNotification {
+                    self.startKeepAliveIfNeeded()
+                }
+                self.ensureListening()
+            }
+            lifecycleObservers.append(token)
+        }
+    }
+
+    private func removeLifecycleObservers() {
+        let center = Foundation.NotificationCenter.default
+        for token in lifecycleObservers {
+            center.removeObserver(token)
+        }
+        lifecycleObservers.removeAll()
+    }
+
+    /// Best-effort rolling background task so the accept thread can stay scheduled longer while
+    /// Trio is backgrounded (alongside existing bluetooth-central / loop work).
+    private func startKeepAliveIfNeeded() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            guard self.shouldRun else {
+                self.teardownKeepAliveOnMain()
+                return
+            }
+            if self.keepAliveTimer == nil {
+                let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.main)
+                timer.schedule(deadline: .now(), repeating: 20.0, leeway: .seconds(2))
+                timer.setEventHandler { [weak self] in
+                    self?.renewKeepAliveTask()
+                }
+                self.keepAliveTimer = timer
+                timer.resume()
+            }
+            self.renewKeepAliveTask()
+        }
+    }
+
+    private func renewKeepAliveTask() {
+        assert(Thread.isMainThread)
+        guard shouldRun else {
+            teardownKeepAliveOnMain()
+            return
+        }
+        if keepAliveTaskID != .invalid {
+            UIApplication.shared.endBackgroundTask(keepAliveTaskID)
+            keepAliveTaskID = .invalid
+        }
+        keepAliveTaskID = UIApplication.shared.beginBackgroundTask(withName: "PebbleHTTPKeepAlive") { [weak self] in
+            guard let self else { return }
+            // Expiration: end cleanly; timer may renew if iOS still allows budget.
+            if self.keepAliveTaskID != .invalid {
+                UIApplication.shared.endBackgroundTask(self.keepAliveTaskID)
+                self.keepAliveTaskID = .invalid
+            }
+            PebbleIntegrationFileLogger.log("http_keepalive", "background task expired — server may suspend until wake")
+        }
+        if keepAliveTaskID == .invalid {
+            debug(.service, "Pebble: background keep-alive task unavailable (budget exhausted or denied)")
+        }
+    }
+
+    private func teardownKeepAlive() {
+        DispatchQueue.main.async { [weak self] in
+            self?.teardownKeepAliveOnMain()
+        }
+    }
+
+    private func teardownKeepAliveOnMain() {
+        keepAliveTimer?.cancel()
+        keepAliveTimer = nil
+        if keepAliveTaskID != .invalid {
+            UIApplication.shared.endBackgroundTask(keepAliveTaskID)
+            keepAliveTaskID = .invalid
+        }
     }
 
     private func runServer() {
-        PebbleIntegrationFileLogger.log("http_server", "runServer() thread started — creating socket for port \(port)")
+        // Serialize bind attempts so ensureListening cannot open two listeners.
+        let started: Bool = lifecycleQueue.sync {
+            guard shouldRun, !isListening else { return false }
+            return true
+        }
+        guard started else { return }
 
-        serverSocket = socket(AF_INET, SOCK_STREAM, 0)
-        guard serverSocket >= 0 else {
-            PebbleIntegrationFileLogger.log("http_server", "FATAL: socket() failed — cannot create server socket")
+        let sock = socket(AF_INET, SOCK_STREAM, 0)
+        guard sock >= 0 else {
             debug(.service, "Pebble: failed to create socket")
+            scheduleRestart(after: 2.0)
             return
         }
 
         var enable: Int32 = 1
-        setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &enable, socklen_t(MemoryLayout<Int32>.size))
+        setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &enable, socklen_t(MemoryLayout<Int32>.size))
+        #if os(iOS) || os(macOS)
+        setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, &enable, socklen_t(MemoryLayout<Int32>.size))
+        #endif
 
         var addr = sockaddr_in()
         addr.sin_family = sa_family_t(AF_INET)
         addr.sin_port = port.bigEndian
         addr.sin_addr.s_addr = inet_addr("127.0.0.1")
 
-        PebbleIntegrationFileLogger.log("http_server", "attempting bind to 127.0.0.1:\(port)")
-
         let bindResult = withUnsafePointer(to: &addr) { ptr in
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
-                bind(serverSocket, sa, socklen_t(MemoryLayout<sockaddr_in>.size))
+                bind(sock, sa, socklen_t(MemoryLayout<sockaddr_in>.size))
             }
         }
 
         guard bindResult == 0 else {
-            PebbleIntegrationFileLogger.log("http_server", "FATAL: bind() failed on port \(port) — address in use or permission denied")
-            debug(.service, "Pebble: failed to bind to port \(port)")
-            close(serverSocket)
+            debug(.service, "Pebble: failed to bind to port \(port) errno=\(errno)")
+            close(sock)
+            scheduleRestart(after: 3.0)
             return
         }
 
-        PebbleIntegrationFileLogger.log("http_server", "bind successful on 127.0.0.1:\(port)")
-
-        guard listen(serverSocket, 5) == 0 else {
-            PebbleIntegrationFileLogger.log("http_server", "FATAL: listen() failed on port \(port)")
-            debug(.service, "Pebble: failed to listen")
-            close(serverSocket)
+        guard listen(sock, 8) == 0 else {
+            debug(.service, "Pebble: failed to listen errno=\(errno)")
+            close(sock)
+            scheduleRestart(after: 3.0)
             return
         }
 
-        isRunning = true
-        PebbleIntegrationFileLogger.log("http_server", "SUCCESS: HTTP server listening on http://127.0.0.1:\(port) — ready for Rebble / browser requests")
+        lifecycleQueue.sync {
+            serverSocket = sock
+            isListening = true
+        }
         debug(.service, "Pebble: API server started on http://127.0.0.1:\(port)")
+        PebbleIntegrationFileLogger.log("http_server", "listening http://127.0.0.1:\(port)")
 
-        while isRunning {
+        var consecutiveAcceptFailures = 0
+        while true {
+            let stillWanted: Bool = lifecycleQueue.sync { shouldRun && serverSocket == sock }
+            guard stillWanted else { break }
+
             var clientAddr = sockaddr_in()
             var clientAddrLen = socklen_t(MemoryLayout<sockaddr_in>.size)
 
             let clientSocket = withUnsafeMutablePointer(to: &clientAddr) { ptr in
                 ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
-                    accept(serverSocket, sa, &clientAddrLen)
+                    accept(sock, sa, &clientAddrLen)
                 }
             }
 
-            guard clientSocket >= 0 else {
-                if isRunning { debug(.service, "Pebble: accept failed") }
+            if clientSocket < 0 {
+                let err = errno
+                // EINTR / EAGAIN — transient
+                if err == EINTR || err == EAGAIN {
+                    continue
+                }
+                consecutiveAcceptFailures += 1
+                let wanted = lifecycleQueue.sync { shouldRun }
+                if wanted {
+                    debug(.service, "Pebble: accept failed errno=\(err) streak=\(consecutiveAcceptFailures)")
+                }
+                // Socket likely closed or process freezing — exit loop and restart if still wanted.
+                if !wanted || consecutiveAcceptFailures >= 5 || err == EBADF || err == EINVAL {
+                    break
+                }
                 continue
             }
 
+            consecutiveAcceptFailures = 0
             // Give Trio a short background window so Rebble can complete HTTP while Trio is not foreground.
             Self.beginShortBackgroundTask()
 
-            DispatchQueue.global(qos: .background).async { [weak self] in
+            DispatchQueue.global(qos: .utility).async { [weak self] in
                 self?.handleRequest(clientSocket)
             }
         }
+
+        lifecycleQueue.sync {
+            if serverSocket == sock {
+                close(sock)
+                serverSocket = -1
+            } else {
+                close(sock)
+            }
+            isListening = false
+        }
+        debug(.service, "Pebble: API accept loop exited (port \(port))")
+        PebbleIntegrationFileLogger.log("http_server", "accept loop exited port=\(port)")
+        scheduleRestart(after: 1.5)
     }
 
     /// Avoid blocking forever if the client stalls mid-request (loopback only, but keeps the accept loop healthy).
@@ -322,7 +500,7 @@ final class PebbleLocalAPIServer {
         <li><a href="/api/all"><code>/api/all</code></a> — combined JSON (same as <code>/api/pebble/v1/snapshot</code>)</li>
         <li><a href="/api/pebble/v1/snapshot"><code>/api/pebble/v1/snapshot</code></a> — versioned Pebble snapshot</li>
         </ul>
-        <p style="color:#666;font-size:0.9rem;">Use Safari <em>on this device</em>; another computer's browser cannot reach <code>127.0.0.1</code> here.</p>
+        <p style="color:#666;font-size:0.9rem;">Use Safari <em>on this device</em>; another computer’s browser cannot reach <code>127.0.0.1</code> here.</p>
         </body></html>
         """
     }
@@ -365,43 +543,58 @@ final class PebbleLocalAPIServer {
             "http_get",
             "GET /api/pebble/v1/bolus_recommendation grams=\(String(format: "%.0f", grams)) → \(String(format: "%.3f", unitsDouble))U tenths=\(tenths)"
         )
-
-        return (200, "application/json", "{\"units\":\(unitsDouble),\"tenths\":\(tenths)}")
+        let body =
+            "{\"grams\":\(Int(grams)),\"recommendedUnits\":\(String(format: "%.3f", unitsDouble)),\"recommendedUnitsTenths\":\(tenths)}"
+        return (200, "application/json", body)
     }
 
     private func handleBolusRequest(_ body: String?) -> (Int, String, String) {
         guard let body = body,
               let data = body.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let units = jsonDouble(json, key: "units") ?? jsonDouble(json, key: "bolusUnits")
+              let units = jsonDouble(json, key: "units")
         else {
-            return (400, "application/json", "{\"error\":\"invalid bolus payload\"}")
+            debug(.service, "Pebble HTTP: /api/bolus rejected — missing body or invalid JSON")
+            return (400, "application/json", "{\"error\":\"invalid request, requires 'units'\"}")
         }
 
-        guard let cmd = commandManager.queueBolus(units: units) else {
-            return (400, "application/json", "{\"error\":\"bolus rejected (invalid or exceeds max)\"}")
+        guard let command = commandManager.queueBolus(units: units) else {
+            return (400, "application/json", "{\"error\":\"bolus exceeds safety limits\"}")
         }
 
-        PebbleIntegrationFileLogger.log("http_post", "POST /api/bolus → queued id=\(cmd.id) units=\(String(format: "%.2f", units))U")
-        return (200, "application/json", "{\"status\":\"queued\",\"id\":\"\(cmd.id)\"}")
+        PebbleIntegrationFileLogger.log("http_post", "POST /api/bolus → delivered id=\(command.id) units=\(String(format: "%.2f", units))U")
+        return (
+            200,
+            "application/json",
+            "{\"status\":\"delivered\",\"type\":\"bolus\",\"commandId\":\"\(command.id)\",\"units\":\(String(format: "%.2f", units))}"
+        )
     }
 
     private func handleCarbRequest(_ body: String?) -> (Int, String, String) {
         guard let body = body,
               let data = body.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let grams = jsonDouble(json, key: "grams") ?? jsonDouble(json, key: "carbGrams")
+              let grams = jsonDouble(json, key: "grams")
         else {
-            return (400, "application/json", "{\"error\":\"invalid carbs payload\"}")
-        }
-        let hours = jsonDouble(json, key: "absorptionHours") ?? 3.0
-
-        guard let cmd = commandManager.queueCarbEntry(grams: grams, absorptionHours: hours) else {
-            return (400, "application/json", "{\"error\":\"carb entry rejected (invalid or exceeds max)\"}")
+            debug(.service, "Pebble HTTP: /api/carbs rejected — missing body or invalid JSON")
+            return (400, "application/json", "{\"error\":\"invalid request, requires 'grams'\"}")
         }
 
-        PebbleIntegrationFileLogger.log("http_post", "POST /api/carbs → queued id=\(cmd.id) grams=\(String(format: "%.0f", grams))g absorption=\(String(format: "%.1f", hours))h")
-        return (200, "application/json", "{\"status\":\"queued\",\"id\":\"\(cmd.id)\"}")
+        let absorptionHours = jsonDouble(json, key: "absorptionHours") ?? 3.0
+
+        guard let command = commandManager.queueCarbEntry(grams: grams, absorptionHours: absorptionHours) else {
+            return (400, "application/json", "{\"error\":\"carb amount exceeds safety limits\"}")
+        }
+
+        PebbleIntegrationFileLogger.log(
+            "http_post",
+            "POST /api/carbs → delivered id=\(command.id) grams=\(String(format: "%.0f", grams))g absorption=\(String(format: "%.1f", absorptionHours))h"
+        )
+        return (
+            200,
+            "application/json",
+            "{\"status\":\"delivered\",\"type\":\"carbEntry\",\"commandId\":\"\(command.id)\",\"grams\":\(String(format: "%.0f", grams))}"
+        )
     }
 
     private func handleConfirmCommand(_ body: String?) -> (Int, String, String) {
@@ -409,13 +602,11 @@ final class PebbleLocalAPIServer {
               let data = body.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let commandId = json["commandId"] as? String
-        else {
-            return (400, "application/json", "{\"error\":\"missing commandId\"}")
-        }
+        else { return (400, "application/json", "{\"error\":\"requires 'commandId'\"}") }
 
         PebbleIntegrationFileLogger.log("http_post", "POST /api/command/confirm commandId=\(commandId)")
         commandManager.confirmCommand(commandId)
-        return (200, "application/json", "{\"status\":\"ok\"}")
+        return (200, "application/json", "{\"status\":\"confirmed\"}")
     }
 
     private func handleRejectCommand(_ body: String?) -> (Int, String, String) {
@@ -423,36 +614,22 @@ final class PebbleLocalAPIServer {
               let data = body.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let commandId = json["commandId"] as? String
-        else {
-            return (400, "application/json", "{\"error\":\"missing commandId\"}")
-        }
+        else { return (400, "application/json", "{\"error\":\"requires 'commandId'\"}") }
 
         PebbleIntegrationFileLogger.log("http_post", "POST /api/command/reject commandId=\(commandId)")
         commandManager.rejectCommand(commandId)
-        return (200, "application/json", "{\"status\":\"ok\"}")
+        return (200, "application/json", "{\"status\":\"rejected\"}")
     }
 
     private func buildHTTPResponse(statusCode: Int, contentType: String, body: String) -> String {
-        let bodyData = body.data(using: .utf8) ?? Data()
-        return """
-        HTTP/1.1 \(statusCode) \(statusText(for: statusCode))\r
-        Content-Type: \(contentType)\r
-        Content-Length: \(bodyData.count)\r
-        Connection: close\r
-        \r
-        \(body)
-        """
-    }
-
-    private func statusText(for code: Int) -> String {
-        switch code {
-        case 200: return "OK"
-        case 400: return "Bad Request"
-        case 404: return "Not Found"
-        case 405: return "Method Not Allowed"
-        case 503: return "Service Unavailable"
-        case 504: return "Gateway Timeout"
-        default: return "Error"
+        let statusText: String
+        switch statusCode {
+        case 200: statusText = "OK"
+        case 202: statusText = "Accepted"
+        case 400: statusText = "Bad Request"
+        case 404: statusText = "Not Found"
+        default: statusText = "Error"
         }
+        return "HTTP/1.1 \(statusCode) \(statusText)\r\nContent-Type: \(contentType)\r\nContent-Length: \(body.utf8.count)\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n\(body)"
     }
 }
