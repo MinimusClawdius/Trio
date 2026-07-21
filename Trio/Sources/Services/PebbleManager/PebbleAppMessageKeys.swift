@@ -4,7 +4,7 @@ import Foundation
 /// to `NSNumber` keys for building `NSDictionary` payloads sent via PebbleKit iOS.
 ///
 /// Values **must** stay synchronised with `trio_types.h : AppMessageKey` and
-/// `src/pkjs/index.js : K`.
+/// `src/pkjs/index.js : K` (and `package.json` messageKeys).
 enum PebbleAppMessageKey: Int, CaseIterable {
     case glucose = 0
     case trend = 1
@@ -53,10 +53,14 @@ enum PebbleAppMessageKey: Int, CaseIterable {
     case configClock24h = 41
     case configGraphScaleMode = 42
     case configGraphTimeRange = 43
+    case configGraphSmooth = 44
+    case configHeaderSize = 45
     /// Short HTTP/Trio link hint from PebbleKit JS (e.g. `No phone`, `Old 3m`). Cleared when a full CGM update arrives.
-    case trioLink = 44
+    case trioLink = 46
+    /// After carb POST, pkjs may send recommended bolus in tenths U to open the bolus picker.
+    case suggestedBolusTenths = 47
 
-    // Last key = 44. Must match `trio-pebble/package.json` messageKeys and `trio_types.h` / `index.js` `K`.
+    // Last data key = 47. Must match `trio-pebble` C/JS/package.json messageKeys.
 
     /// `NSNumber` suitable for use as an `NSDictionary` key in PebbleKit iOS messages.
     var nsKey: NSNumber { NSNumber(value: rawValue) }

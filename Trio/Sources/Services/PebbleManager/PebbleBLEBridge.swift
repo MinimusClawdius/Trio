@@ -23,14 +23,29 @@ protocol PebbleBLEBridgeDelegate: AnyObject {
 ///
 /// When `PebbleKit.framework` is absent, `start()` / `sendState()` are no-ops.
 ///
+/// ## SDK availability (2026)
+/// Official **PebbleKit iOS 4.0** (2016) does **not** compile on current Xcode / GitHub Actions
+/// macOS runners. The Podfile was removed for that reason. This bridge stays behind
+/// `#if canImport(PebbleKit)` so HTTP-only CI builds keep working. When a modern SDK
+/// (Rebble / community) is linkable, `sdkAvailable` becomes `true` automatically.
+///
 /// ## Background mode
 /// With `bluetooth-central` + `bluetooth-peripheral` UIBackgroundModes, iOS allows
 /// the BLE connection to survive backgrounding. PebbleKit can even relaunch Trio
 /// if the watch sends a message while Trio is suspended (BLE-only devices, fw ≥ 3.8).
 final class PebbleBLEBridge: NSObject {
 
-    /// trio-pebble watchface UUID from `appinfo.json`
+    /// trio-pebble watchface UUID from `package.json` / `appinfo.json`
     static let watchfaceUUIDString = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+
+    /// `true` only when this binary was compiled with PebbleKit headers/module available.
+    static var sdkAvailable: Bool {
+        #if canImport(PebbleKit)
+        true
+        #else
+        false
+        #endif
+    }
 
     weak var delegate: PebbleBLEBridgeDelegate?
 
@@ -74,7 +89,7 @@ final class PebbleBLEBridge: NSObject {
 
         isRunning = true
         PebbleIntegrationFileLogger.log("ble_bridge", "started — looking for Pebble watch (UUID=\(Self.watchfaceUUIDString))")
-        debug(.service, "PebbleBLE: started — looking for Pebble watch")
+        debug(.service, "PebbleBLE: started — looking for Pebble watch (UUID=\(Self.watchfaceUUIDString))")
     }
 
     func stop() {
@@ -90,6 +105,7 @@ final class PebbleBLEBridge: NSObject {
         isConnected = false
         isRunning = false
         debug(.service, "PebbleBLE: stopped")
+        PebbleIntegrationFileLogger.log("ble_bridge", "stopped")
     }
 
     // MARK: Send
@@ -110,6 +126,7 @@ final class PebbleBLEBridge: NSObject {
         watch.appMessagesPushUpdate(payload) { _, _, error in
             if let error = error {
                 debug(.service, "PebbleBLE: send failed — \(error.localizedDescription)")
+                PebbleIntegrationFileLogger.log("ble_bridge", "send failed — \(error.localizedDescription)")
             } else {
                 debug(.service, "PebbleBLE: pushed update to watch")
             }
@@ -129,6 +146,7 @@ final class PebbleBLEBridge: NSObject {
 
         let name = watch.name ?? "Pebble"
         debug(.service, "PebbleBLE: connected to \(name)")
+        PebbleIntegrationFileLogger.log("ble_bridge", "connected to \(name)")
         delegate?.pebbleBLE(didConnect: name)
     }
 
@@ -144,6 +162,7 @@ final class PebbleBLEBridge: NSObject {
             lastPushedHash = nil
         }
         debug(.service, "PebbleBLE: disconnected from \(name)")
+        PebbleIntegrationFileLogger.log("ble_bridge", "disconnected from \(name)")
         delegate?.pebbleBLE(didDisconnect: name)
     }
 
@@ -168,12 +187,16 @@ final class PebbleBLEBridge: NSObject {
     // ──────────────────────────────────────────────
 
     func start() {
-        debug(.service, "PebbleBLE: SDK not linked — BLE bridge inactive, using HTTP fallback")
         isRunning = false
+        isConnected = false
+        let msg = "SDK not linked (legacy PebbleKit iOS incompatible with current Xcode) — BLE no-op; JS+HTTP primary"
+        debug(.service, "PebbleBLE: \(msg)")
+        PebbleIntegrationFileLogger.log("ble_bridge", msg)
     }
 
     func stop() {
         isRunning = false
+        isConnected = false
     }
 
     func sendState(_: WatchState) {

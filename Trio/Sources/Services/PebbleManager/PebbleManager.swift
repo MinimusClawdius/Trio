@@ -41,6 +41,8 @@ final class BasePebbleManager: PebbleManager, Injectable {
 
     var isBLEConnected: Bool { bleBridge.isConnected }
     var httpServerRunning: Bool { apiServer?.isServerRunning ?? false }
+    /// Compile-time: whether this binary linked a PebbleKit module (`canImport(PebbleKit)`).
+    var isNativeBLESDKAvailable: Bool { PebbleBLEBridge.sdkAvailable }
 
     /// Persisted only via `PebbleService` when onboarded; otherwise stays `false`.
     var useNativeBLEPush: Bool = false
@@ -105,9 +107,17 @@ final class BasePebbleManager: PebbleManager, Injectable {
         }
 
         isRunning = true
-        let bleStatus = useNativeBLEPush
-            ? (bleBridge.isRunning ? "native BLE bridge on" : "native BLE bridge inactive (SDK?)")
-            : "native BLE off (JS + HTTP only)"
+        let sdk = PebbleBLEBridge.sdkAvailable ? "sdk=linked" : "sdk=missing"
+        let bleStatus: String
+        if !useNativeBLEPush {
+            bleStatus = "native BLE off (JS + HTTP only) [\(sdk)]"
+        } else if !PebbleBLEBridge.sdkAvailable {
+            bleStatus = "native BLE requested but SDK not linked — HTTP only"
+        } else if bleBridge.isRunning {
+            bleStatus = "native BLE bridge on [\(sdk)]"
+        } else {
+            bleStatus = "native BLE bridge inactive [\(sdk)]"
+        }
         debug(.service, "Pebble: integration started — HTTP on port \(port), \(bleStatus)")
         PebbleIntegrationFileLogger.log("manager", "start HTTP :\(port) \(bleStatus)")
     }
@@ -146,6 +156,10 @@ final class BasePebbleManager: PebbleManager, Injectable {
         if enabled {
             dataBridge.nativeIosBlePushEnabled = true
             bleBridge.start()
+            if !PebbleBLEBridge.sdkAvailable {
+                dataBridge.isBLEPushActive = false
+                debug(.service, "Pebble: native BLE toggle on but SDK missing — HTTP keep-alive remains primary")
+            }
         } else {
             bleBridge.stop()
             dataBridge.isBLEPushActive = false

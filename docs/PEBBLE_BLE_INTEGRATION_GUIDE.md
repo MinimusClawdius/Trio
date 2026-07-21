@@ -1,6 +1,6 @@
 # Pebble BLE Push Integration Guide
 
-> **Update:** Trio’s **default** Pebble path is **PebbleKit JS + loopback HTTP** (`/api/all`). Native iOS BLE push is **optional** and **off by default** (`PebbleService.useNativeBLEPush`). See **[PEBBLE_JS_PRIMARY_ARCHITECTURE.md](./PEBBLE_JS_PRIMARY_ARCHITECTURE.md)** for the current contract and versioning.
+> **Update (2026):** Trio’s **default** Pebble path is **PebbleKit JS + loopback HTTP** (`/api/all`). Native iOS BLE push is **optional**, **off by default**, and **not linked** in standard CI builds. See **[PEBBLE_JS_PRIMARY_ARCHITECTURE.md](./PEBBLE_JS_PRIMARY_ARCHITECTURE.md)** for the current contract and versioning.
 
 ## Overview
 
@@ -9,9 +9,9 @@ Trio can use **two channels**; only one should be thought of as “primary”:
 | Channel | Transport | Default? | Notes |
 |---------|-----------|----------|-------|
 | **HTTP + JS** | `127.0.0.1` — pkjs polls Trio | **Yes** | Supported, versioned snapshot (`pebbleProtocolVersion`, `stateRevision`). |
-| **Native iOS BLE** | PebbleKit iOS → Rebble → BLE | **No (opt-in)** | Best-effort; enable only in Pebble service settings. |
+| **Native iOS BLE** | PebbleKit iOS → Rebble → BLE | **No (opt-in)** | Requires a **linkable** modern SDK. Official PebbleKit iOS 4.0 does **not** compile on current Xcode. |
 
-Both channels target the **same AppMessage key layout** on the watch when native push is enabled.
+Both channels target the **same AppMessage key layout** on the watch when native push is enabled and the SDK is present.
 
 ## Architecture
 
@@ -21,7 +21,7 @@ Both channels target the **same AppMessage key layout** on the watch when native
 │                                                    │
 │  ┌──────────────────┐  ┌────────────────────────┐  │
 │  │ PebbleDataBridge  │  │ PebbleBLEBridge        │  │
-│  │ (HTTP JSON cache) │  │ (PebbleKit iOS SDK)    │  │
+│  │ (HTTP JSON cache) │  │ (#if canImport SDK)    │  │
 │  └────────┬─────────┘  └──────────┬─────────────┘  │
 │           │                       │                 │
 │  ┌────────▼─────────┐             │                 │
@@ -30,7 +30,7 @@ Both channels target the **same AppMessage key layout** on the watch when native
 │  └────────┬─────────┘             │                 │
 └───────────┼───────────────────────┼─────────────────┘
             │                       │
-     HTTP (127.0.0.1)        PebbleKit iOS IPC
+     HTTP (127.0.0.1)        PebbleKit iOS IPC (if linked)
             │                       │
    ┌────────▼─────────┐   ┌────────▼─────────┐
    │  Rebble App       │   │  Rebble App       │
@@ -45,29 +45,27 @@ Both channels target the **same AppMessage key layout** on the watch when native
                └──────────────────┘
 ```
 
-## Setup Instructions
+## Setup instructions (native BLE)
 
-### 1. Install PebbleKit iOS SDK
+### Why there is no Podfile
 
-**Option A: CocoaPods (recommended)**
+The repo **does not** ship a CocoaPods `Podfile` for Pebble. **PebbleKit iOS 4.0** (last official release, 2016) fails to build on modern Xcode / GitHub Actions runners. Shipping CocoaPods would break CI for everyone for an experimental path.
 
-```bash
-cd /path/to/Trio
-pod install
-open Trio.xcworkspace  # use workspace, not .xcodeproj
-```
+`PebbleBLEBridge` uses `#if canImport(PebbleKit)`:
 
-This uses the `Podfile` already created in the repo root.
+- **Without module:** stub — `sdkAvailable == false`, `start()` / `sendState()` no-op; Settings shows “Not linked (HTTP-only build)”.
+- **With a future linkable SDK:** full `PBPebbleCentral` path compiles automatically.
 
-**Option B: Manual framework**
+### If you maintain a private fork with a modern SDK
 
-1. Download `PebbleKit.framework` from [github.com/pebble/pebble-ios-sdk](https://github.com/pebble/pebble-ios-sdk)
-2. Drag into Xcode → Trio target → "Frameworks, Libraries, and Embedded Content"
-3. Set "Embed & Sign"
+1. Add the framework / SPM / CocoaPods module so Xcode can `import PebbleKit`.
+2. Build Trio — confirm Settings → Services → Pebble → **Native BLE SDK** shows **Linked**.
+3. Enable **Native iOS BLE data push (experimental)** only for testing.
+4. Keep JS poll active as backup; do **not** slow pkjs polls based on `blePushActive` (that caused stale UI historically).
 
-### 2. Verify Background Modes (already configured)
+### Background modes (already configured)
 
-In `Trio/Resources/Info.plist`, the following are already present:
+In `Trio/Resources/Info.plist`:
 
 ```xml
 <key>UIBackgroundModes</key>
@@ -78,90 +76,81 @@ In `Trio/Resources/Info.plist`, the following are already present:
 </array>
 ```
 
-And:
-```xml
-<key>NSBluetoothPeripheralUsageDescription</key>
-<string>Bluetooth is used to communicate with insulin pump and continuous glucose monitor devices</string>
-```
+These help **pump/CGM** and would help native PebbleKit if linked. They do **not** by themselves keep the **loopback HTTP** server alive forever when Trio is suspended.
 
-No additional Info.plist changes are needed.
+## How it works
 
-### 3. Build and Test
+### Data flow (HTTP + JS — primary)
 
-After adding PebbleKit, the `#if canImport(PebbleKit)` guards in `PebbleBLEBridge.swift` automatically compile the full BLE implementation. Without the SDK, the bridge compiles as a no-op stub and the existing HTTP path continues to work.
+1. Trio `WatchState` → `PebbleDataBridge` + `PebbleLocalAPIServer` on `127.0.0.1`.
+2. Rebble runs trio-pebble **pkjs** → `GET /api/all` (or `/api/pebble/v1/snapshot`).
+3. JS normalizes → `Pebble.sendAppMessage` → watch `inbox_received`.
+4. Watch commands → pkjs → `POST /api/bolus` / `/api/carbs` → on-phone confirmation path.
 
-## How It Works
+### Adaptive HTTP keep-alive (battery)
 
-### Data Flow (BLE Push)
+While integration is enabled and Trio is **backgrounded**, the local server renews a short `beginBackgroundTask` about every **45s** so Rebble can still hit loopback. If there is **no HTTP traffic for ~3 minutes**, keep-alive **idle-suspends** so iOS can sleep Trio (saves battery). The next CGM/loop wake, foreground, or `ensureListening` resumes keep-alive. Foreground does not hold continuous BG tasks.
 
-1. Trio's `AppleWatchManager` calls `pebbleManager.sendState(watchState)`
-2. `BasePebbleManager.sendState()` updates **both**:
-   - `PebbleDataBridge` (HTTP cache for JS fallback)
-   - `PebbleBLEBridge.sendState()` (BLE push)
-3. `PebbleBLEBridge` converts `WatchState` → `NSDictionary` matching AppMessage keys
-4. Calls `PBWatch.appMessagesPushUpdate(dict)` → message goes through Rebble → BLE → watch
-5. Watch's `inbox_received()` processes it exactly like a JS-originated message
+### Data flow (native BLE push — experimental)
 
-### JS Fallback Behavior
+1. `BasePebbleManager.sendState()` updates the HTTP cache and, if toggle + SDK, `PebbleBLEBridge.sendState()`.
+2. Bridge builds AppMessage dict from `PebbleAppMessageKey` (must match C/JS).
+3. `PBWatch.appMessagesPushUpdate` → Rebble → BLE → watch.
 
-When BLE push is active, `/api/all` includes `"blePushActive": true`. PebbleKit JS detects this and:
-- Slows polling from 30s to 5 min (backup only)
-- Continues handling: weather, config page, commands from watch
-
-When BLE disconnects, JS resumes 30s polling automatically.
-
-### Key Matching
-
-All keys are defined in three synchronized locations:
+### Key matching
 
 | Location | File | Purpose |
 |----------|------|---------|
-| C (watch) | `trio_types.h` → `AppMessageKey` enum | Watch-side key constants |
-| JS | `index.js` → `K` object | PebbleKit JS key constants |
-| Swift | `PebbleAppMessageKeys.swift` → `PebbleAppMessageKey` | PebbleKit iOS key constants |
+| C (watch) | `trio_types.h` → `AppMessageKey` | Watch-side keys |
+| JS | `pkjs/index.js` → `K` | PebbleKit JS keys |
+| Swift | `PebbleAppMessageKeys.swift` | Native push keys |
 
-**Critical**: these three must stay in sync. The values are sequential integers starting at 0.
+**Critical:** keep sequential integers in sync through **key 47** (`suggestedBolusTenths`). Last keys include `configGraphSmooth` (44), `configHeaderSize` (45), `trioLink` (46).
 
-## Conditional Compilation
+### Snapshot flags
 
-`PebbleBLEBridge.swift` uses `#if canImport(PebbleKit)` to compile the full SDK integration only when the framework is available:
+- `nativeIosBlePushEnabled` — user toggle
+- `blePushActive` — toggle **and** bridge reports connected watch  
+PebbleKit JS must **not** slow its poll cadence when `blePushActive` is true.
 
-- **With PebbleKit**: Full BLE bridge active, data pushed on every `sendState`
-- **Without PebbleKit**: `start()` logs a message and returns; `sendState()` is a no-op
+## Conditional compilation
 
-This means the existing Trio build compiles and runs fine without any SDK changes — the BLE path activates only when PebbleKit is linked.
+| Build | Behavior |
+|-------|----------|
+| Default CI / TestFlight without PebbleKit | HTTP only; BLE toggle explains SDK missing |
+| Private build with PebbleKit module | Full BLE bridge; Settings shows SDK linked |
 
-## Testing Checklist
+## Testing checklist
 
-### BLE Push
-- [ ] Install PebbleKit SDK via CocoaPods
-- [ ] Build Trio — verify no compilation errors
-- [ ] Open Trio with Pebble watch paired to Rebble
-- [ ] Verify Xcode console shows: `PebbleBLE: started — looking for Pebble watch`
-- [ ] Verify: `PebbleBLE: connected to <watch name>`
-- [ ] Verify: `PebbleBLE: pushed update to watch` on each CGM reading
-- [ ] Background Trio → verify watch still receives updates
-- [ ] Kill Rebble → verify `PebbleBLE: disconnected` → JS resumes polling
+### HTTP (always)
 
-### HTTP Fallback
-- [ ] Without PebbleKit SDK: verify HTTP server still works normally
-- [ ] With PebbleKit + BLE active: verify `/api/all` shows `"blePushActive": true`
-- [ ] With PebbleKit + BLE disconnected: verify `/api/all` shows `"blePushActive": false`
-- [ ] Verify JS poll interval changes (30s ↔ 5min) based on BLE status
+- [ ] Enable Pebble integration → Status **HTTP server: Listening**
+- [ ] Rebble + trio-pebble → watch glucose updates
+- [ ] Export **Pebble log** after a failure
+- [ ] Background Trio → confirm polls work while keep-alive active; after long idle, wake may be required
+
+### Native BLE (only with SDK linked)
+
+- [ ] Settings shows **Native BLE SDK: Linked**
+- [ ] Enable experimental toggle → console: `PebbleBLE: started`
+- [ ] Connected / pushed update logs on CGM ticks
+- [ ] Without SDK: toggle explains no-op; HTTP still works
 
 ### Commands
-- [ ] Send bolus command from watch over BLE → verify queued in `PebbleCommandManager`
-- [ ] Send carb command from watch over BLE → verify queued
-- [ ] Confirm command on iPhone → verify execution
 
-## Files Modified/Added
+- [ ] Bolus/carbs from watch over HTTP path
+- [ ] With SDK: BLE inbound command path if exercised
 
-### Trio (Swift)
-- **NEW** `PebbleAppMessageKeys.swift` — Key enum matching C/JS constants
-- **NEW** `PebbleBLEBridge.swift` — PebbleKit iOS wrapper with conditional compilation
-- **MODIFIED** `PebbleManager.swift` — Dual-channel (HTTP + BLE) management
-- **MODIFIED** `PebbleDataBridge.swift` — Added `blePushActive` flag in `/api/all`
-- **NEW** `Podfile` — CocoaPods dependency for PebbleKit
+## Files (Trio)
 
-### trio-pebble (Pebble watchface)
-- **MODIFIED** `src/pkjs/index.js` — Dynamic poll interval based on BLE status
+- `PebbleAppMessageKeys.swift` — keys 0…47 aligned with C/JS
+- `PebbleBLEBridge.swift` — `#if canImport(PebbleKit)` + `sdkAvailable`
+- `PebbleManager.swift` — dual-channel management
+- `PebbleLocalAPIServer.swift` — loopback HTTP + adaptive keep-alive
+- `PebbleServiceFormView.swift` — status + experimental BLE UI
+- **No** root `Podfile` for PebbleKit (by design)
+
+### trio-pebble
+
+- `src/pkjs/index.js` — transport / normalization (primary)
+- `src/trio_types.h` — AppMessage keys

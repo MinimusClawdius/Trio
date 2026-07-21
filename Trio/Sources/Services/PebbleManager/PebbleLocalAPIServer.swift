@@ -17,12 +17,19 @@ import Glibc
 /// **Not the same as Garmin:** `GarminManager` uses Garmin Connect IQ to send messages to the
 /// watch while Trio is active. This server answers HTTP **pull** requests on loopback. iOS will
 /// **suspend** Trio when another app is frontmost; we (1) extend background time on each accept,
-/// (2) hold a rolling keep-alive background task while the server is enabled, and (3) auto-restart
-/// the accept loop if the socket dies. Full suspension can still drop loopback until Trio wakes.
+/// (2) hold an **adaptive** rolling keep-alive background task while the server is enabled and
+/// recently used, and (3) auto-restart the accept loop if the socket dies. Full suspension can
+/// still drop loopback until Trio wakes (CGM / loop / user opens Trio).
 final class PebbleLocalAPIServer {
     private static let headerSeparator = Data("\r\n\r\n".utf8)
     /// Cap total request size (headers + body) to avoid unbounded reads.
     private static let maxRequestBytes = 512 * 1024
+    /// Rolling BG-task renewal interval while backgrounded and active (seconds).
+    /// 45s balances battery vs staying schedulable; former 20s was too aggressive.
+    private static let keepAliveRenewInterval: TimeInterval = 45
+    /// After this many seconds with **no** HTTP traffic, stop renewing keep-alive and let iOS
+    /// suspend Trio. Next CGM/foreground/`ensureListening` restarts keep-alive.
+    private static let keepAliveIdleSuspendSeconds: TimeInterval = 180
 
     private var serverSocket: Int32 = -1
     /// Desired run state (set by start/stop). Accept loop may exit while this stays true → restart.
@@ -31,6 +38,8 @@ final class PebbleLocalAPIServer {
     private(set) var isListening = false
     /// Public read-only status for Settings UI (maps to live accept loop, not just desired state).
     var isServerRunning: Bool { isListening }
+    /// Wall-clock of last successfully handled HTTP request (for idle keep-alive / diagnostics).
+    private(set) var lastRequestAt: Date?
     private let port: UInt16
     private let dataBridge: PebbleDataBridge
     private let commandManager: PebbleCommandManager
@@ -41,6 +50,8 @@ final class PebbleLocalAPIServer {
     private var keepAliveTaskID: UIBackgroundTaskIdentifier = .invalid
     private var keepAliveTimer: DispatchSourceTimer?
     private var lifecycleObservers: [NSObjectProtocol] = []
+    /// True while adaptive keep-alive intentionally paused after idle (not a full stop()).
+    private var keepAliveIdleSuspended = false
 
     init(
         dataBridge: PebbleDataBridge,
@@ -97,14 +108,35 @@ final class PebbleLocalAPIServer {
     }
 
     /// Call when Trio returns to foreground or after pump/CGM wake — restarts socket if it died.
+    /// Also resumes adaptive keep-alive after an idle suspend so Rebble can reach loopback again.
     func ensureListening() {
         lifecycleQueue.async { [weak self] in
             guard let self, self.shouldRun else { return }
-            self.startKeepAliveIfNeeded()
             if !self.isListening {
                 debug(.service, "Pebble: ensureListening — accept loop down, restarting on :\(self.port)")
                 self.launchAcceptLoop()
             }
+        }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.shouldRun else { return }
+            self.keepAliveIdleSuspended = false
+            self.startKeepAliveIfNeeded()
+        }
+    }
+
+    /// Mark recent Rebble/HTTP activity so keep-alive does not idle-suspend.
+    /// `lastRequestAt` and keep-alive flags are touched on the main queue (same as renew timer).
+    private func noteRequestActivity() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.lastRequestAt = Date()
+            if self.keepAliveIdleSuspended {
+                self.keepAliveIdleSuspended = false
+                debug(.service, "Pebble: HTTP activity — resuming background keep-alive after idle suspend")
+                PebbleIntegrationFileLogger.log("http_keepalive", "resumed after idle (request activity)")
+            }
+            // Always re-evaluate; no-ops if still foreground or already running.
+            self.startKeepAliveIfNeeded()
         }
     }
 
@@ -162,6 +194,10 @@ final class PebbleLocalAPIServer {
 
     /// Best-effort rolling background task so the accept thread can stay scheduled longer while
     /// Trio is backgrounded (alongside existing bluetooth-central / loop work).
+    ///
+    /// **Battery:** renew every ~45s only while backgrounded and not idle. After
+    /// `keepAliveIdleSuspendSeconds` without HTTP traffic, stop renewing so iOS can suspend
+    /// Trio (Rebble will fail until CGM/loop/user wakes the app — same as any background app).
     private func startKeepAliveIfNeeded() {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
@@ -169,9 +205,22 @@ final class PebbleLocalAPIServer {
                 self.teardownKeepAliveOnMain()
                 return
             }
+            // Foreground: do not hold continuous BG tasks — accept loop already runs.
+            if UIApplication.shared.applicationState == .active {
+                self.teardownKeepAliveOnMain()
+                self.keepAliveIdleSuspended = false
+                return
+            }
+            if self.keepAliveIdleSuspended {
+                return
+            }
             if self.keepAliveTimer == nil {
                 let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.main)
-                timer.schedule(deadline: .now(), repeating: 20.0, leeway: .seconds(2))
+                timer.schedule(
+                    deadline: .now(),
+                    repeating: Self.keepAliveRenewInterval,
+                    leeway: .seconds(5)
+                )
                 timer.setEventHandler { [weak self] in
                     self?.renewKeepAliveTask()
                 }
@@ -186,6 +235,23 @@ final class PebbleLocalAPIServer {
         assert(Thread.isMainThread)
         guard shouldRun else {
             teardownKeepAliveOnMain()
+            return
+        }
+        if UIApplication.shared.applicationState == .active {
+            teardownKeepAliveOnMain()
+            return
+        }
+        // Idle suspend: no HTTP for a few minutes → stop burning background budget.
+        let last = lastRequestAt ?? Date.distantPast
+        let idle = Date().timeIntervalSince(last)
+        if idle >= Self.keepAliveIdleSuspendSeconds {
+            keepAliveIdleSuspended = true
+            teardownKeepAliveOnMain()
+            debug(.service, "Pebble: keep-alive idle-suspended after \(Int(idle))s without HTTP — battery save until wake")
+            PebbleIntegrationFileLogger.log(
+                "http_keepalive",
+                "idle-suspended after \(Int(idle))s without HTTP — will resume on ensureListening/request"
+            )
             return
         }
         if keepAliveTaskID != .invalid {
@@ -389,6 +455,8 @@ final class PebbleLocalAPIServer {
             _ = write(clientSocket, [UInt8](response.utf8), response.utf8.count)
             return
         }
+
+        noteRequestActivity()
 
         let (statusCode, contentType, responseBody) = routeRequest(
             method: parsed.method,
