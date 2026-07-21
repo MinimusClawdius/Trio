@@ -77,7 +77,11 @@ final class BasePebbleManager: PebbleManager, Injectable {
     }
 
     func start() {
-        guard !isRunning else { return }
+        if isRunning {
+            // Already marked running — still poke the HTTP listener in case the socket died.
+            apiServer?.ensureListening()
+            return
+        }
 
         // HTTP server — PebbleKit JS primary transport
         let server = PebbleLocalAPIServer(
@@ -104,6 +108,7 @@ final class BasePebbleManager: PebbleManager, Injectable {
             ? (bleBridge.isRunning ? "native BLE bridge on" : "native BLE bridge inactive (SDK?)")
             : "native BLE off (JS + HTTP only)"
         debug(.service, "Pebble: integration started — HTTP on port \(port), \(bleStatus)")
+        PebbleIntegrationFileLogger.log("manager", "start HTTP :\(port) \(bleStatus)")
     }
 
     func stop() {
@@ -112,6 +117,7 @@ final class BasePebbleManager: PebbleManager, Injectable {
         bleBridge.stop()
         isRunning = false
         debug(.service, "Pebble: integration stopped")
+        PebbleIntegrationFileLogger.log("manager", "stop")
     }
 
     func sendState(_ state: WatchState) {
@@ -122,6 +128,9 @@ final class BasePebbleManager: PebbleManager, Injectable {
 
         // Always refresh HTTP snapshot — PebbleKit JS is the default consumer.
         dataBridge.updateFromWatchState(state)
+
+        // Opportunistic heal: every WatchState push (loop/CGM) also re-checks the local API socket.
+        apiServer?.ensureListening()
 
         if useNativeBLEPush {
             bleBridge.sendState(state)

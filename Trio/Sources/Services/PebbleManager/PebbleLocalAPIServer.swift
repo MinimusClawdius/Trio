@@ -16,20 +16,29 @@ import Glibc
 ///
 /// **Not the same as Garmin:** `GarminManager` uses Garmin Connect IQ to send messages to the
 /// watch while Trio is active. This server answers HTTP **pull** requests on loopback. iOS will
-/// **suspend** Trio when another app is frontmost, so Safari/Rebble cannot rely on this URL staying
-/// reachable indefinitely — only a ~25s background extension is started per accepted connection.
+/// **suspend** Trio when another app is frontmost; we (1) extend background time on each accept,
+/// (2) hold a rolling keep-alive background task while the server is enabled, and (3) auto-restart
+/// the accept loop if the socket dies. Full suspension can still drop loopback until Trio wakes.
 final class PebbleLocalAPIServer {
     private static let headerSeparator = Data("\r\n\r\n".utf8)
     /// Cap total request size (headers + body) to avoid unbounded reads.
     private static let maxRequestBytes = 512 * 1024
 
     private var serverSocket: Int32 = -1
-    private var isRunning = false
+    /// Desired run state (set by start/stop). Accept loop may exit while this stays true → restart.
+    private var shouldRun = false
+    /// True while accept loop is active and listening.
+    private(set) var isListening = false
     private let port: UInt16
     private let dataBridge: PebbleDataBridge
     private let commandManager: PebbleCommandManager
     /// Optional carb → bolus recommendation (same engine as Apple Watch); used by `GET /api/pebble/v1/bolus_recommendation`.
     private let recommendBolusForCarbsGrams: ((Double) async -> Decimal)?
+    private let lifecycleQueue = DispatchQueue(label: "trio.pebble.http.lifecycle")
+    private var restartWorkItem: DispatchWorkItem?
+    private var keepAliveTaskID: UIBackgroundTaskIdentifier = .invalid
+    private var keepAliveTimer: DispatchSourceTimer?
+    private var lifecycleObservers: [NSObjectProtocol] = []
 
     init(
         dataBridge: PebbleDataBridge,
@@ -59,29 +68,177 @@ final class PebbleLocalAPIServer {
     }
 
     func start() {
-        guard !isRunning else { return }
-        DispatchQueue.global(qos: .background).async { [weak self] in
-            self?.runServer()
+        lifecycleQueue.async { [weak self] in
+            guard let self else { return }
+            self.shouldRun = true
+            self.installLifecycleObserversIfNeeded()
+            self.startKeepAliveIfNeeded()
+            guard !self.isListening else { return }
+            self.launchAcceptLoop()
         }
     }
 
     func stop() {
-        isRunning = false
-        if serverSocket >= 0 {
-            close(serverSocket)
-            serverSocket = -1
+        lifecycleQueue.async { [weak self] in
+            guard let self else { return }
+            self.shouldRun = false
+            self.restartWorkItem?.cancel()
+            self.restartWorkItem = nil
+            self.teardownKeepAlive()
+            self.removeLifecycleObservers()
+            self.isListening = false
+            if self.serverSocket >= 0 {
+                close(self.serverSocket)
+                self.serverSocket = -1
+            }
+        }
+    }
+
+    /// Call when Trio returns to foreground or after pump/CGM wake — restarts socket if it died.
+    func ensureListening() {
+        lifecycleQueue.async { [weak self] in
+            guard let self, self.shouldRun else { return }
+            self.startKeepAliveIfNeeded()
+            if !self.isListening {
+                debug(.service, "Pebble: ensureListening — accept loop down, restarting on :\(self.port)")
+                self.launchAcceptLoop()
+            }
+        }
+    }
+
+    private func launchAcceptLoop() {
+        // Always off lifecycleQueue to avoid blocking start/stop.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            self?.runServer()
+        }
+    }
+
+    private func scheduleRestart(after seconds: Double) {
+        lifecycleQueue.async { [weak self] in
+            guard let self, self.shouldRun else { return }
+            self.restartWorkItem?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.lifecycleQueue.async {
+                    guard self.shouldRun, !self.isListening else { return }
+                    debug(.service, "Pebble: retrying HTTP server bind on :\(self.port)")
+                    self.launchAcceptLoop()
+                }
+            }
+            self.restartWorkItem = work
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + seconds, execute: work)
+        }
+    }
+
+    private func installLifecycleObserversIfNeeded() {
+        guard lifecycleObservers.isEmpty else { return }
+        let center = Foundation.NotificationCenter.default
+        let names: [NSNotification.Name] = [
+            UIApplication.didBecomeActiveNotification,
+            UIApplication.willEnterForegroundNotification,
+            UIApplication.didEnterBackgroundNotification
+        ]
+        for name in names {
+            let token = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+                guard let self else { return }
+                if note.name == UIApplication.didEnterBackgroundNotification {
+                    self.startKeepAliveIfNeeded()
+                }
+                self.ensureListening()
+            }
+            lifecycleObservers.append(token)
+        }
+    }
+
+    private func removeLifecycleObservers() {
+        let center = Foundation.NotificationCenter.default
+        for token in lifecycleObservers {
+            center.removeObserver(token)
+        }
+        lifecycleObservers.removeAll()
+    }
+
+    /// Best-effort rolling background task so the accept thread can stay scheduled longer while
+    /// Trio is backgrounded (alongside existing bluetooth-central / loop work).
+    private func startKeepAliveIfNeeded() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            guard self.shouldRun else {
+                self.teardownKeepAliveOnMain()
+                return
+            }
+            if self.keepAliveTimer == nil {
+                let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.main)
+                timer.schedule(deadline: .now(), repeating: 20.0, leeway: .seconds(2))
+                timer.setEventHandler { [weak self] in
+                    self?.renewKeepAliveTask()
+                }
+                self.keepAliveTimer = timer
+                timer.resume()
+            }
+            self.renewKeepAliveTask()
+        }
+    }
+
+    private func renewKeepAliveTask() {
+        assert(Thread.isMainThread)
+        guard shouldRun else {
+            teardownKeepAliveOnMain()
+            return
+        }
+        if keepAliveTaskID != .invalid {
+            UIApplication.shared.endBackgroundTask(keepAliveTaskID)
+            keepAliveTaskID = .invalid
+        }
+        keepAliveTaskID = UIApplication.shared.beginBackgroundTask(withName: "PebbleHTTPKeepAlive") { [weak self] in
+            guard let self else { return }
+            // Expiration: end cleanly; timer may renew if iOS still allows budget.
+            if self.keepAliveTaskID != .invalid {
+                UIApplication.shared.endBackgroundTask(self.keepAliveTaskID)
+                self.keepAliveTaskID = .invalid
+            }
+            PebbleIntegrationFileLogger.log("http_keepalive", "background task expired — server may suspend until wake")
+        }
+        if keepAliveTaskID == .invalid {
+            debug(.service, "Pebble: background keep-alive task unavailable (budget exhausted or denied)")
+        }
+    }
+
+    private func teardownKeepAlive() {
+        DispatchQueue.main.async { [weak self] in
+            self?.teardownKeepAliveOnMain()
+        }
+    }
+
+    private func teardownKeepAliveOnMain() {
+        keepAliveTimer?.cancel()
+        keepAliveTimer = nil
+        if keepAliveTaskID != .invalid {
+            UIApplication.shared.endBackgroundTask(keepAliveTaskID)
+            keepAliveTaskID = .invalid
         }
     }
 
     private func runServer() {
-        serverSocket = socket(AF_INET, SOCK_STREAM, 0)
-        guard serverSocket >= 0 else {
+        // Serialize bind attempts so ensureListening cannot open two listeners.
+        let started: Bool = lifecycleQueue.sync {
+            guard shouldRun, !isListening else { return false }
+            return true
+        }
+        guard started else { return }
+
+        let sock = socket(AF_INET, SOCK_STREAM, 0)
+        guard sock >= 0 else {
             debug(.service, "Pebble: failed to create socket")
+            scheduleRestart(after: 2.0)
             return
         }
 
         var enable: Int32 = 1
-        setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &enable, socklen_t(MemoryLayout<Int32>.size))
+        setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &enable, socklen_t(MemoryLayout<Int32>.size))
+        #if os(iOS) || os(macOS)
+        setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, &enable, socklen_t(MemoryLayout<Int32>.size))
+        #endif
 
         var addr = sockaddr_in()
         addr.sin_family = sa_family_t(AF_INET)
@@ -90,47 +247,84 @@ final class PebbleLocalAPIServer {
 
         let bindResult = withUnsafePointer(to: &addr) { ptr in
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
-                bind(serverSocket, sa, socklen_t(MemoryLayout<sockaddr_in>.size))
+                bind(sock, sa, socklen_t(MemoryLayout<sockaddr_in>.size))
             }
         }
 
         guard bindResult == 0 else {
-            debug(.service, "Pebble: failed to bind to port \(port)")
-            close(serverSocket)
+            debug(.service, "Pebble: failed to bind to port \(port) errno=\(errno)")
+            close(sock)
+            scheduleRestart(after: 3.0)
             return
         }
 
-        guard listen(serverSocket, 5) == 0 else {
-            debug(.service, "Pebble: failed to listen")
-            close(serverSocket)
+        guard listen(sock, 8) == 0 else {
+            debug(.service, "Pebble: failed to listen errno=\(errno)")
+            close(sock)
+            scheduleRestart(after: 3.0)
             return
         }
 
-        isRunning = true
+        lifecycleQueue.sync {
+            serverSocket = sock
+            isListening = true
+        }
         debug(.service, "Pebble: API server started on http://127.0.0.1:\(port)")
+        PebbleIntegrationFileLogger.log("http_server", "listening http://127.0.0.1:\(port)")
 
-        while isRunning {
+        var consecutiveAcceptFailures = 0
+        while true {
+            let stillWanted: Bool = lifecycleQueue.sync { shouldRun && serverSocket == sock }
+            guard stillWanted else { break }
+
             var clientAddr = sockaddr_in()
             var clientAddrLen = socklen_t(MemoryLayout<sockaddr_in>.size)
 
             let clientSocket = withUnsafeMutablePointer(to: &clientAddr) { ptr in
                 ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
-                    accept(serverSocket, sa, &clientAddrLen)
+                    accept(sock, sa, &clientAddrLen)
                 }
             }
 
-            guard clientSocket >= 0 else {
-                if isRunning { debug(.service, "Pebble: accept failed") }
+            if clientSocket < 0 {
+                let err = errno
+                // EINTR / EAGAIN — transient
+                if err == EINTR || err == EAGAIN {
+                    continue
+                }
+                consecutiveAcceptFailures += 1
+                let wanted = lifecycleQueue.sync { shouldRun }
+                if wanted {
+                    debug(.service, "Pebble: accept failed errno=\(err) streak=\(consecutiveAcceptFailures)")
+                }
+                // Socket likely closed or process freezing — exit loop and restart if still wanted.
+                if !wanted || consecutiveAcceptFailures >= 5 || err == EBADF || err == EINVAL {
+                    break
+                }
                 continue
             }
 
+            consecutiveAcceptFailures = 0
             // Give Trio a short background window so Rebble can complete HTTP while Trio is not foreground.
             Self.beginShortBackgroundTask()
 
-            DispatchQueue.global(qos: .background).async { [weak self] in
+            DispatchQueue.global(qos: .utility).async { [weak self] in
                 self?.handleRequest(clientSocket)
             }
         }
+
+        lifecycleQueue.sync {
+            if serverSocket == sock {
+                close(sock)
+                serverSocket = -1
+            } else {
+                close(sock)
+            }
+            isListening = false
+        }
+        debug(.service, "Pebble: API accept loop exited (port \(port))")
+        PebbleIntegrationFileLogger.log("http_server", "accept loop exited port=\(port)")
+        scheduleRestart(after: 1.5)
     }
 
     /// Avoid blocking forever if the client stalls mid-request (loopback only, but keeps the accept loop healthy).
