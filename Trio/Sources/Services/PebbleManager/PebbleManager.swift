@@ -40,6 +40,7 @@ final class BasePebbleManager: PebbleManager, Injectable {
     private(set) var isRunning = false
 
     var isBLEConnected: Bool { bleBridge.isConnected }
+    var httpServerRunning: Bool { apiServer?.isServerRunning ?? false }
 
     /// Persisted only via `PebbleService` when onboarded; otherwise stays `false`.
     var useNativeBLEPush: Bool = false

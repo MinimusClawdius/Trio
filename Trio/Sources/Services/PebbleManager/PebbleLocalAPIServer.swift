@@ -29,6 +29,8 @@ final class PebbleLocalAPIServer {
     private var shouldRun = false
     /// True while accept loop is active and listening.
     private(set) var isListening = false
+    /// Public read-only status for Settings UI (maps to live accept loop, not just desired state).
+    var isServerRunning: Bool { isListening }
     private let port: UInt16
     private let dataBridge: PebbleDataBridge
     private let commandManager: PebbleCommandManager
