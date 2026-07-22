@@ -40,6 +40,38 @@ final class PebbleLocalAPIServer {
     var isServerRunning: Bool { isListening }
     /// Wall-clock of last successfully handled HTTP request (for idle keep-alive / diagnostics).
     private(set) var lastRequestAt: Date?
+    /// Whether adaptive keep-alive is intentionally paused after idle (main-queue flag).
+    var isKeepAliveIdleSuspended: Bool { keepAliveIdleSuspended }
+    /// True while a rolling keep-alive timer is scheduled (main-queue).
+    var isKeepAliveTimerRunning: Bool { keepAliveTimer != nil }
+
+    /// Short status string for Settings / logs (safe to call from main).
+    var keepAliveStatusSummary: String {
+        if !shouldRun {
+            return "Stopped"
+        }
+        switch UIApplication.shared.applicationState {
+        case .active:
+            return "Foreground (no rolling BG task)"
+        case .inactive:
+            break
+        case .background:
+            break
+        @unknown default:
+            break
+        }
+        if keepAliveIdleSuspended {
+            if let last = lastRequestAt {
+                let idle = Int(Date().timeIntervalSince(last))
+                return "Idle-suspended (~\(idle)s since last poll)"
+            }
+            return "Idle-suspended (battery save)"
+        }
+        if keepAliveTimer != nil || keepAliveTaskID != .invalid {
+            return "Background keep-alive active"
+        }
+        return "Background (keep-alive idle)"
+    }
     private let port: UInt16
     private let dataBridge: PebbleDataBridge
     private let commandManager: PebbleCommandManager

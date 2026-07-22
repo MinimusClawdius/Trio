@@ -43,6 +43,10 @@ final class BasePebbleManager: PebbleManager, Injectable {
     var httpServerRunning: Bool { apiServer?.isServerRunning ?? false }
     /// Compile-time: whether this binary linked a PebbleKit module (`canImport(PebbleKit)`).
     var isNativeBLESDKAvailable: Bool { PebbleBLEBridge.sdkAvailable }
+    /// Adaptive HTTP keep-alive mode (foreground / active / idle-suspended).
+    var httpKeepAliveStatusSummary: String {
+        apiServer?.keepAliveStatusSummary ?? "No server"
+    }
 
     /// Persisted only via `PebbleService` when onboarded; otherwise stays `false`.
     var useNativeBLEPush: Bool = false

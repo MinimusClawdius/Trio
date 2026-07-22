@@ -125,6 +125,7 @@ PebbleKit JS must **not** slow its poll cadence when `blePushActive` is true.
 ### HTTP (always)
 
 - [ ] Enable Pebble integration → Status **HTTP server: Listening**
+- [ ] **HTTP keep-alive** row: Foreground when app open; **Background keep-alive active** while Rebble polls in BG; **Idle-suspended** after ~3 min without polls
 - [ ] Rebble + trio-pebble → watch glucose updates
 - [ ] Export **Pebble log** after a failure
 - [ ] Background Trio → confirm polls work while keep-alive active; after long idle, wake may be required

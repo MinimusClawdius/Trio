@@ -91,6 +91,11 @@ struct PebbleServiceFormView: View {
                     ok: pebbleManager?.httpServerRunning == true && service.isEnabled
                 )
                 statusRow(
+                    title: String(localized: "HTTP keep-alive", comment: "Pebble status keep-alive label"),
+                    value: keepAliveStatusText,
+                    ok: service.isEnabled && !(pebbleManager?.httpKeepAliveStatusSummary.contains("Idle-suspended") ?? false)
+                )
+                statusRow(
                     title: String(localized: "Native BLE SDK", comment: "Pebble status BLE SDK label"),
                     value: nativeBLESDKAvailable
                         ? String(localized: "Linked in this build", comment: "Pebble BLE SDK present")
@@ -243,6 +248,15 @@ struct PebbleServiceFormView: View {
             return String(localized: "Listening on loopback", comment: "Pebble HTTP listening")
         }
         return String(localized: "Not listening", comment: "Pebble HTTP down")
+    }
+
+    private var keepAliveStatusText: String {
+        _ = statusTick
+        guard service.isEnabled else {
+            return String(localized: "Off", comment: "Pebble keep-alive off")
+        }
+        return pebbleManager?.httpKeepAliveStatusSummary
+            ?? String(localized: "Unknown", comment: "Pebble keep-alive unknown")
     }
 
     private var bleLinkStatusText: String {
