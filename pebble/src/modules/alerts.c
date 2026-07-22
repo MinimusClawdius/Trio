@@ -34,14 +34,15 @@ void alerts_check(AppState *state) {
     time_t now = time(NULL);
     TrioConfig *cfg = &state->config;
 
-    // Urgent low — separate 120s cooldown so 30s HTTP polls do not re-vibrate.
-    if (glucose <= cfg->urgent_low && glucose > 0) {
+    /* Urgent low: only when low alerts are enabled (same master toggle as low threshold).
+     * Own cooldown so frequent HTTP polls do not re-vibrate every 30s. */
+    if (cfg->alert_low_enabled && glucose <= cfg->urgent_low && glucose > 0) {
         if (now - state->alerts.last_urgent_alert_time >= URGENT_REPEAT_MIN_SEC) {
             state->alerts.urgent_low_active = true;
             state->alerts.last_urgent_alert_time = now;
             state->alerts.last_alert_time = now;
             VibePattern pat = { .durations = VIBE_URGENT, .num_segments = ARRAY_LENGTH(VIBE_URGENT) };
-            vibes_enact_custom_pattern(pat);
+            vibes_enqueue_custom_pattern(pat);
         }
         return;
     }
@@ -49,13 +50,12 @@ void alerts_check(AppState *state) {
 
     if (now - state->alerts.last_alert_time < ALERT_REPEAT_MIN_SEC) return;
 
-    // Low — latch until clearly above threshold (reduces bounce at boundary)
     if (cfg->alert_low_enabled && glucose <= cfg->low_threshold) {
         if (!state->alerts.low_active) {
             state->alerts.low_active = true;
             state->alerts.last_alert_time = now;
             VibePattern pat = { .durations = VIBE_LOW, .num_segments = ARRAY_LENGTH(VIBE_LOW) };
-            vibes_enact_custom_pattern(pat);
+            vibes_enqueue_custom_pattern(pat);
         }
         return;
     }
@@ -63,13 +63,12 @@ void alerts_check(AppState *state) {
         state->alerts.low_active = false;
     }
 
-    // High — latch until clearly below threshold
     if (cfg->alert_high_enabled && glucose >= cfg->high_threshold) {
         if (!state->alerts.high_active) {
             state->alerts.high_active = true;
             state->alerts.last_alert_time = now;
             VibePattern pat = { .durations = VIBE_HIGH, .num_segments = ARRAY_LENGTH(VIBE_HIGH) };
-            vibes_enact_custom_pattern(pat);
+            vibes_enqueue_custom_pattern(pat);
         }
         return;
     }
