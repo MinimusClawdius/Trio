@@ -15,15 +15,17 @@ struct PebbleServiceFormView: View {
     let onCreateFinished: (() -> Void)?
 
     /// Never substitute a throwaway manager — it would not match the instance wired to `PebbleLocalAPIServer`.
-    private var pebbleCommandManager: PebbleCommandManager? {
-    private var basePebbleManager: BasePebbleManager? {
+    private var pebbleManager: BasePebbleManager? {
         TrioApp.resolver.resolve(PebbleManager.self) as? BasePebbleManager
     }
-        (TrioApp.resolver.resolve(PebbleManager.self) as? BasePebbleManager)?.getCommandManager()
+
+    private var pebbleCommandManager: PebbleCommandManager? {
+        pebbleManager?.getCommandManager()
     }
 
     @State private var showPebbleLogShare = false
     @State private var showNoPebbleLogAlert = false
+    @State private var statusTick = Date()
 
     private var pebbleLogExportURL: URL? { PebbleIntegrationFileLogger.exportLogFileURL() }
 
@@ -33,6 +35,10 @@ struct PebbleServiceFormView: View {
               let size = attrs[.size] as? NSNumber
         else { return false }
         return size.intValue > 0
+    }
+
+    private var nativeBLESDKAvailable: Bool {
+        PebbleBLEBridge.sdkAvailable
     }
 
     var body: some View {
@@ -47,10 +53,6 @@ struct PebbleServiceFormView: View {
                 Toggle(
                     String(localized: "Enable Pebble integration", comment: "Pebble service toggle"),
                     isOn: $service.isEnabled
-                )
-                Toggle(
-                    String(localized: "Native iOS BLE data push (experimental)", comment: "Pebble optional PebbleKit iOS BLE toggle"),
-                    isOn: $service.useNativeBLEPush
                 )
                 HStack {
                     Text(String(localized: "Local HTTP port", comment: "Pebble JS fallback server port label"))
@@ -70,51 +72,65 @@ struct PebbleServiceFormView: View {
                     .multilineTextAlignment(.trailing)
                     .frame(maxWidth: 80)
                 }
-
-                if let mgr = basePebbleManager {
-                    HStack {
-                        Text("HTTP Server")
-                        Spacer()
-                        if mgr.httpServerRunning {
-                            Text("Running")
-                                .foregroundStyle(.green)
-                                .font(.callout)
-                        } else {
-                            Text("Stopped")
-                                .foregroundStyle(.secondary)
-                                .font(.callout)
-                        }
-                    }
-                    HStack {
-                        Text("Native BLE Push")
-                        Spacer()
-                        if mgr.useNativeBLEPush {
-                            if mgr.isBLEConnected {
-                                Text("Connected")
-                                    .foregroundStyle(.green)
-                                    .font(.callout)
-                            } else {
-                                Text("Enabled (searching)")
-                                    .foregroundStyle(.orange)
-                                    .font(.callout)
-                            }
-                        } else {
-                            Text("Disabled")
-                                .foregroundStyle(.secondary)
-                                .font(.callout)
-                        }
-                    }
-                }
             } header: {
                 Text(String(localized: "Connection", comment: "Pebble service section header"))
             } footer: {
                 Text(
                     String(
                         localized:
-                        "Recommended: leave native BLE off. PebbleKit JavaScript in Rebble polls this port and sends data to the watch — that is the supported, future-proof path. Enable native iOS BLE only if you understand it may be unreliable when Trio is backgrounded.",
-                        comment: "Pebble service help footer"
+                        "Supported path: PebbleKit JavaScript in Rebble polls this loopback port and sends data to the watch. Keep Trio available (or rely on CGM/loop wakes). Adaptive background keep-alive runs only while backgrounded and recently polled, then idles to save battery.",
+                        comment: "Pebble service HTTP help footer"
                     )
                 )
+            }
+
+            Section {
+                statusRow(
+                    title: String(localized: "HTTP server", comment: "Pebble status HTTP label"),
+                    value: httpStatusText,
+                    ok: pebbleManager?.httpServerRunning == true && service.isEnabled
+                )
+                statusRow(
+                    title: String(localized: "HTTP keep-alive", comment: "Pebble status keep-alive label"),
+                    value: keepAliveStatusText,
+                    ok: service.isEnabled && !(pebbleManager?.httpKeepAliveStatusSummary.contains("Idle-suspended") ?? false)
+                )
+                statusRow(
+                    title: String(localized: "Native BLE SDK", comment: "Pebble status BLE SDK label"),
+                    value: nativeBLESDKAvailable
+                        ? String(localized: "Linked in this build", comment: "Pebble BLE SDK present")
+                        : String(localized: "Not linked (HTTP-only build)", comment: "Pebble BLE SDK missing"),
+                    ok: nativeBLESDKAvailable
+                )
+                if service.useNativeBLEPush {
+                    statusRow(
+                        title: String(localized: "Native BLE link", comment: "Pebble status BLE connected label"),
+                        value: bleLinkStatusText,
+                        ok: pebbleManager?.isBLEConnected == true
+                    )
+                }
+            } header: {
+                Text(String(localized: "Status", comment: "Pebble service status section"))
+            } footer: {
+                Text(
+                    String(
+                        localized:
+                        "Status reflects the live Pebble manager. Pull to refresh after enabling. Export the Pebble log if HTTP shows offline while Rebble is polling.",
+                        comment: "Pebble status footer"
+                    )
+                )
+            }
+
+            Section {
+                Toggle(
+                    String(localized: "Native iOS BLE data push (experimental)", comment: "Pebble optional PebbleKit iOS BLE toggle"),
+                    isOn: $service.useNativeBLEPush
+                )
+                .disabled(!nativeBLESDKAvailable && !service.useNativeBLEPush)
+            } header: {
+                Text(String(localized: "Experimental", comment: "Pebble experimental section"))
+            } footer: {
+                Text(nativeBLEFooterText)
             }
 
             Section {
@@ -176,6 +192,9 @@ struct PebbleServiceFormView: View {
         }
         .navigationTitle(String(localized: "Pebble", comment: "Pebble service navigation title"))
         .navigationBarTitleDisplayMode(.inline)
+        .refreshable {
+            statusTick = Date()
+        }
         .sheet(isPresented: $showPebbleLogShare) {
             if let url = pebbleLogExportURL {
                 ShareSheet(activityItems: [url])
@@ -199,6 +218,9 @@ struct PebbleServiceFormView: View {
                 service.persistUpdate()
             }
         }
+        .onAppear {
+            statusTick = Date()
+        }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button(mode == .create ? String(localized: "Continue", comment: "Pebble onboarding continue") : String(
@@ -215,5 +237,66 @@ struct PebbleServiceFormView: View {
                 }
             }
         }
+    }
+
+    private var httpStatusText: String {
+        _ = statusTick
+        guard service.isEnabled else {
+            return String(localized: "Off", comment: "Pebble HTTP off")
+        }
+        if pebbleManager?.httpServerRunning == true {
+            return String(localized: "Listening on loopback", comment: "Pebble HTTP listening")
+        }
+        return String(localized: "Not listening", comment: "Pebble HTTP down")
+    }
+
+    private var keepAliveStatusText: String {
+        _ = statusTick
+        guard service.isEnabled else {
+            return String(localized: "Off", comment: "Pebble keep-alive off")
+        }
+        return pebbleManager?.httpKeepAliveStatusSummary
+            ?? String(localized: "Unknown", comment: "Pebble keep-alive unknown")
+    }
+
+    private var bleLinkStatusText: String {
+        _ = statusTick
+        if !nativeBLESDKAvailable {
+            return String(localized: "SDK missing — no-op", comment: "Pebble BLE no SDK")
+        }
+        if pebbleManager?.isBLEConnected == true {
+            return String(localized: "Connected", comment: "Pebble BLE connected")
+        }
+        if service.useNativeBLEPush {
+            return String(localized: "Searching / disconnected", comment: "Pebble BLE not connected")
+        }
+        return String(localized: "Off", comment: "Pebble BLE off")
+    }
+
+    private var nativeBLEFooterText: String {
+        if nativeBLESDKAvailable {
+            return String(
+                localized:
+                "Optional. When a modern PebbleKit iOS module is linked, Trio can push AppMessages directly. Prefer JS+HTTP for reliability. Leave off unless you are testing native push.",
+                comment: "Pebble BLE footer when SDK present"
+            )
+        }
+        return String(
+            localized:
+            "Official PebbleKit iOS 4.0 (2016) does not build on current Xcode, so App Store / CI builds ship HTTP-only. The toggle is kept for future Rebble/community SDKs; with this binary it cannot open a native BLE data path. Battery: keep-alive for HTTP is adaptive (background + recent polls only).",
+            comment: "Pebble BLE footer when SDK missing"
+        )
+    }
+
+    @ViewBuilder
+    private func statusRow(title: String, value: String, ok: Bool) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text(value)
+                .foregroundStyle(ok ? Color.secondary : Color.orange)
+                .multilineTextAlignment(.trailing)
+        }
+        .accessibilityElement(children: .combine)
     }
 }

@@ -53,12 +53,28 @@ PebbleKit JS should **not** change poll cadence based on `blePushActive` (histor
 
 ## Optional native iOS BLE (`PebbleBLEBridge`)
 
-When enabled, Trio can push the **same logical payload** as pkjs (AppMessage key layout aligned with `PebbleAppMessageKeys` / `trio-pebble` `K` map). iOS background and Rebble lifecycle still apply — this path is **best-effort**, not guaranteed streaming.
+When enabled **and** the binary links a PebbleKit module (`PebbleBLEBridge.sdkAvailable`), Trio can push the **same logical payload** as pkjs (AppMessage keys 0…47 aligned with `PebbleAppMessageKeys` / trio-pebble `K`). Official PebbleKit iOS 4.0 does **not** build on current Xcode — CI/TestFlight builds are **HTTP-only** (`sdkAvailable == false`). There is **no** Podfile for Pebble. Native push remains **best-effort**.
+
+Settings → Services → Pebble shows **Native BLE SDK** linked vs not, HTTP listening status, and battery-oriented copy for keep-alive.
+
+## Adaptive HTTP keep-alive (battery)
+
+`PebbleLocalAPIServer` does **not** renew background tasks forever:
+
+| State | Behavior |
+|-------|----------|
+| Foreground | No rolling `beginBackgroundTask`; accept loop runs normally. |
+| Background + recent HTTP | Renew keep-alive ~every **45s**. |
+| Background + **~3 min** with no HTTP | **Idle-suspend** keep-alive so iOS can sleep Trio. |
+| CGM/loop/foreground / next request | `ensureListening` / activity resumes keep-alive. |
+
+This reduces idle battery drain vs a fixed 20s forever renew while still helping Rebble during active polls.
 
 ## iOS limitations (honest expectations)
 
-- Loopback HTTP is served by Trio’s process. If iOS **suspends** Trio, **Rebble cannot reach** `127.0.0.1` until Trio runs again (short background tasks around each accepted connection help only marginally).
-- **Reliability tactics:** keep Trio in foreground when debugging; use Rebble’s logs; watch `stateRevision` in `/api/all`; prefer a **reasonable poll interval** in pkjs (trio-pebble uses ~20s by default).
+- Loopback HTTP is served by Trio’s process. If iOS **suspends** Trio, **Rebble cannot reach** `127.0.0.1` until Trio runs again.
+- Adaptive keep-alive + per-accept short BG tasks improve the window; they are not a guarantee of always-on loopback.
+- **Reliability tactics:** keep Trio in foreground when debugging; use Rebble’s logs; watch `stateRevision` in `/api/all`; prefer a **reasonable poll interval** in pkjs (trio-pebble ~20s by default).
 
 ## trio-pebble repository
 
