@@ -128,7 +128,8 @@ final class PebbleBLEBridge: NSObject {
                 debug(.service, "PebbleBLE: send failed — \(error.localizedDescription)")
                 PebbleIntegrationFileLogger.log("ble_bridge", "send failed — \(error.localizedDescription)")
             } else {
-                debug(.service, "PebbleBLE: pushed update to watch")
+                // Success path is high-frequency; keep out of console (file logger tag is quiet).
+                PebbleIntegrationFileLogger.log("ble_bridge", "pushed update")
             }
         }
     }

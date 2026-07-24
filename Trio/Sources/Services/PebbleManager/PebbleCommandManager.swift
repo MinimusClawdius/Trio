@@ -180,11 +180,18 @@ private extension PebbleCommand {
     }
 }
 
-/// Append-only UTF-8 log under Caches (`Trio-Pebble-Integration.log`) for Pebble HTTP/BLE confirm flows; mirrored to `debug(.service, …)`.
+/// Append-only UTF-8 log under Caches (`Trio-Pebble-Integration.log`) for Pebble HTTP/BLE confirm flows.
+/// Routine keep-alive / success noise is file-only; errors and command lifecycle also hit `debug(.service)`.
 enum PebbleIntegrationFileLogger {
     private static let fileName = "Trio-Pebble-Integration.log"
-    private static let maxBytes = 384 * 1024
+    private static let maxBytes = 256 * 1024
     private static let queue = DispatchQueue(label: "net.nightscout.Trio.pebbleIntegrationFileLog", qos: .utility)
+
+    /// Tags that are useful in the export file but should not spam the system/console log.
+    private static let fileOnlyTags: Set<String> = [
+        "http_keepalive",
+        "ble_bridge"
+    ]
 
     /// Share or upload this file from **Settings → Services → Pebble → Export Pebble log**.
     static func exportLogFileURL() -> URL? {
@@ -195,7 +202,17 @@ enum PebbleIntegrationFileLogger {
     static func log(_ tag: String, _ message: String) {
         let ts = ISO8601DateFormatter().string(from: Date())
         let line = "[\(ts)] [\(tag)] \(message)\n"
-        debug(.service, "Pebble file log [\(tag)] \(message)")
+
+        let mirrorToConsole = !fileOnlyTags.contains(tag)
+            || message.contains("fail")
+            || message.contains("error")
+            || message.contains("expired")
+            || message.contains("idle-suspended")
+            || message.lowercased().contains("unavailable")
+
+        if mirrorToConsole {
+            debug(.service, "Pebble[\(tag)] \(message)")
+        }
 
         queue.async {
             guard let url = exportLogFileURL() else { return }
