@@ -69,7 +69,10 @@ final class PebbleBLEBridge: NSObject {
     private var receiveHandlerHandle: Any?
 
     func start() {
-        guard !isRunning else { return }
+        // Force reset state to ensure fresh connection after device switch
+        isRunning = false
+        isConnected = false
+        
         guard let uuid = NSUUID(uuidString: Self.watchfaceUUIDString) else {
             debug(.service, "PebbleBLE: invalid watchface UUID")
             return
