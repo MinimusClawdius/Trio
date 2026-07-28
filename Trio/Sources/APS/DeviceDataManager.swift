@@ -56,7 +56,7 @@ private let accessLock = NSRecursiveLock(label: "BaseDeviceDataManager.accessLoc
 
 final class BaseDeviceDataManager: DeviceDataManager, Injectable {
     private let processQueue = DispatchQueue.markedQueue(label: "BaseDeviceDataManager.processQueue", qos: .userInitiated)
-    private let log = OSLog(category: "DeviceDataManager")
+    private let log = OSLog(subsystem: "com.loopkit.trio", category: "DeviceDataManager")
     @Injected() private var pumpHistoryStorage: PumpHistoryStorage!
     @Injected() var alertHistoryStorage: AlertHistoryStorage!
     @Injected() private var storage: FileStorage!
@@ -738,11 +738,3 @@ protocol PumpDeactivatedObserver {
 }
 
 
-    // Additional logging for RileyLink BLE debugging with Medtronic pumps
-    private func logRileyLinkBLEState(_ message: String, details: Any? = nil) {
-        if let details = details {
-            log.default("MedtronicRileyLink: \(message) - \(details)")
-        } else {
-            log.default("MedtronicRileyLink: \(message)")
-        }
-    }
