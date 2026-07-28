@@ -1,4 +1,4 @@
 import CoreData
 import Foundation
 
-@objc(GlucoseStored) public class GlucoseStored: NSManagedObject {}
+@objc(GlucoseStored) public class GlucoseStored: NSManagedObject, @unchecked Sendable {}

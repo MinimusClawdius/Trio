@@ -14,7 +14,7 @@ protocol WatchManager {
 
 /// Main implementation of the Watch communication manager
 /// Handles bidirectional communication between iPhone and Apple Watch
-final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchManager {
+final class BaseWatchManager: NSObject, @unchecked Sendable, WCSessionDelegate, Injectable, WatchManager {
     private var session: WCSession?
 
     @Injected() var broadcaster: Broadcaster!

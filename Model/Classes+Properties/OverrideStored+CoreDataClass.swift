@@ -1,4 +1,4 @@
 import CoreData
 import Foundation
 
-@objc(OverrideStored) public class OverrideStored: NSManagedObject {}
+@objc(OverrideStored) public class OverrideStored: NSManagedObject, @unchecked Sendable {}
