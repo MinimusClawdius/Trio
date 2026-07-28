@@ -14,6 +14,7 @@ import ShareClient
 import SwiftDate
 import Swinject
 import UserNotifications
+import os.log
 
 protocol DeviceDataManager: GlucoseSource {
     var pumpManager: PumpManagerUI? { get set }
@@ -90,6 +91,8 @@ final class BaseDeviceDataManager: DeviceDataManager, Injectable {
             if let pumpManager = pumpManager {
                 pumpManager.pumpManagerDelegate = self
                 pumpManager.delegateQueue = processQueue
+
+                self.log.default("MedtronicRileyLink: pumpManager set to \(pumpManager.localizedTitle) (plugin: \(pumpManager.pluginIdentifier)) - registering alerts and syncing state")
 
                 trioAlertManager?.register(responder: pumpManager, for: pumpManager.pluginIdentifier)
                 trioAlertManager?.register(soundVendor: pumpManager, for: pumpManager.pluginIdentifier)
@@ -733,3 +736,13 @@ protocol PumpBatteryObserver {
 protocol PumpDeactivatedObserver {
     func pumpDeactivatedDidChange()
 }
+
+
+    // Additional logging for RileyLink BLE debugging with Medtronic pumps
+    private func logRileyLinkBLEState(_ message: String, details: Any? = nil) {
+        if let details = details {
+            log.default("MedtronicRileyLink: \(message) - \(details)")
+        } else {
+            log.default("MedtronicRileyLink: \(message)")
+        }
+    }
