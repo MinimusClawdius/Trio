@@ -267,3 +267,15 @@ extension BasePebbleManager {
     /// Matches `Persisted` key for the legacy Watch Config toggle when no `PebbleService` exists.
     static let legacyEnabledUserDefaultsKey = "BasePebbleManager.isEnabled"
 }
+
+
+    /// Reset BLE state when switching pumps (Omnipod → Medtronic or vice versa). Prevents the PebbleBLEBridge from leaving the central in a dirty state that blocks RileyLink scanning.
+    func resetBLEForPumpSwitch() {
+        bleBridge.stop()
+        dataBridge.isBLEPushActive = false
+        dataBridge.nativeIosBlePushEnabled = false
+        isBLEConnected = false
+        lastPushedHash = nil
+        debug(.service, "Pebble: BLE reset for pump switch - central state cleared to allow RileyLink scanning")
+        PebbleIntegrationFileLogger.log("ble_reset", "reset for pump switch")
+    }

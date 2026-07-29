@@ -85,6 +85,9 @@ final class BaseDeviceDataManager: DeviceDataManager, Injectable {
         didSet {
             if let pumpManager = pumpManager {
                 pumpManager.pumpManagerDelegate = self
+                if let oldPump = oldValue, oldPump.pluginIdentifier != pumpManager.pluginIdentifier {
+                    pebbleManager.resetBLEForPumpSwitch()
+                }
                 pumpManager.delegateQueue = processQueue
 
                 /// Since the pump manager has been successfully instantiated from its saved state,
