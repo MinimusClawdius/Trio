@@ -56,7 +56,7 @@ private let accessLock = NSRecursiveLock(label: "BaseDeviceDataManager.accessLoc
 
 final class BaseDeviceDataManager: DeviceDataManager, Injectable {
     private let processQueue = DispatchQueue.markedQueue(label: "BaseDeviceDataManager.processQueue", qos: .userInitiated)
-    private let log = Logger(subsystem: "com.loopkit.trio", category: "DeviceDataManager")
+
     @Injected() private var pumpHistoryStorage: PumpHistoryStorage!
     @Injected() var alertHistoryStorage: AlertHistoryStorage!
     @Injected() private var storage: FileStorage!
@@ -92,7 +92,7 @@ final class BaseDeviceDataManager: DeviceDataManager, Injectable {
                 pumpManager.pumpManagerDelegate = self
                 pumpManager.delegateQueue = processQueue
 
-                self.log.debug("MedtronicRileyLink: pumpManager set to \(pumpManager.localizedTitle) (plugin: \(pumpManager.pluginIdentifier)) - registering alerts and syncing state")
+                debug(.deviceManager, "MedtronicRileyLink: pumpManager set to \(pumpManager.localizedTitle) (plugin: \(pumpManager.pluginIdentifier)) - registering alerts and syncing state")
 
                 trioAlertManager?.register(responder: pumpManager, for: pumpManager.pluginIdentifier)
                 trioAlertManager?.register(soundVendor: pumpManager, for: pumpManager.pluginIdentifier)
@@ -131,7 +131,7 @@ final class BaseDeviceDataManager: DeviceDataManager, Injectable {
                 processQueue.async {
                     pumpManager.syncDeliveryLimits(limits: deliveryLimits) { result in
                         if case let .failure(error) = result {
-                            self.log.debug("syncDeliveryLimits on pump manager init failed: \(error)")
+                            debug(.deviceManager, "syncDeliveryLimits on pump manager init failed: \(error)")
                         }
                     }
                 }
@@ -230,7 +230,7 @@ final class BaseDeviceDataManager: DeviceDataManager, Injectable {
                             try context.save()
 
                         } catch {
-                            self.log.debug("Failed to delete OpenAPS_Battery entries: \(error)")
+                            debug(.deviceManager, "Failed to delete OpenAPS_Battery entries: \(error)")
                         }
                     }
                 }
@@ -290,15 +290,15 @@ final class BaseDeviceDataManager: DeviceDataManager, Injectable {
 
     private func updatePumpData() {
         guard let pumpManager = pumpManager else {
-            self.log.debug("Pump is not set, skip updating")
+            debug(.deviceManager, "Pump is not set, skip updating")
             updateUpdateFinished(false)
             return
         }
 
-        self.log.debug("Start updating the pump data")
+        debug(.deviceManager, "Start updating the pump data")
         processQueue.safeSync {
             pumpManager.ensureCurrentPumpData { _ in
-                self.log.debug("Pump data updated.")
+                debug(.deviceManager, "Pump data updated.")
                 self.updateUpdateFinished(true)
             }
         }
@@ -329,28 +329,28 @@ final class BaseDeviceDataManager: DeviceDataManager, Injectable {
 
     private func pumpManagerTypeFromRawValue(_ rawValue: [String: Any]) -> PumpManager.Type? {
         guard let managerIdentifier = rawValue["managerIdentifier"] as? String else {
-            self.log.debug("pumpManagerTypeFromRawValue: no managerIdentifier in rawValue")
+            debug(.deviceManager, "pumpManagerTypeFromRawValue: no managerIdentifier in rawValue")
             return nil
         }
 
-        self.log.debug("pumpManagerTypeFromRawValue: looking for managerIdentifier='\(managerIdentifier)'")
+        debug(.deviceManager, "pumpManagerTypeFromRawValue: looking for managerIdentifier='\(managerIdentifier)'")
 
         if let pumpManager = pumpManagerTypeByIdentifier(managerIdentifier) {
-            self.log.debug("pumpManagerTypeFromRawValue: found '\(managerIdentifier)' in staticPumpManagersByIdentifier")
+            debug(.deviceManager, "pumpManagerTypeFromRawValue: found '\(managerIdentifier)' in staticPumpManagersByIdentifier")
             return pumpManager
         }
 
-        self.log.debug("pumpManagerTypeFromRawValue: '\(managerIdentifier)' NOT found in staticPumpManagersByIdentifier")
+        debug(.deviceManager, "pumpManagerTypeFromRawValue: '\(managerIdentifier)' NOT found in staticPumpManagersByIdentifier")
 
         /// The pumpManager was not found for managerIdentifier. If this was for an "Omnipod" (OmniKit) or
         /// "Omnipod-DASH" (OmniBLE), have the universal "Omni" pumpManager (OmnipodKit) handle instead.
         let OmniStr = "Omni"
         if managerIdentifier.hasPrefix(OmniStr) {
-            self.log.debug("pumpManagerTypeFromRawValue: '\(managerIdentifier)' has prefix 'Omni', trying Omni")
+            debug(.deviceManager, "pumpManagerTypeFromRawValue: '\(managerIdentifier)' has prefix 'Omni', trying Omni")
             return pumpManagerTypeByIdentifier(OmniStr)
         }
 
-        self.log.debug("pumpManagerTypeFromRawValue: fallback failed for '\(managerIdentifier)'")
+        debug(.deviceManager, "pumpManagerTypeFromRawValue: fallback failed for '\(managerIdentifier)'")
         return nil
     }
 
@@ -386,10 +386,10 @@ final class BaseDeviceDataManager: DeviceDataManager, Injectable {
                 medtronic.fetchNewDataIfNeeded { result in
                     switch result {
                     case .noData:
-                        self.log.debug("Minilink glucose is empty")
+                        debug(.deviceManager, "Minilink glucose is empty")
                         promise(.success([]))
                     case .unreliableData:
-                        self.log.debug("Unreliable data received")
+                        debug(.deviceManager, "Unreliable data received")
                         promise(.success([]))
                     case let .newData(glucose):
                         let directions: [BloodGlucose.Direction?] = [nil]
@@ -447,11 +447,11 @@ extension BaseDeviceDataManager: PumpManagerDelegate {
         didRequestBasalRateScheduleChange _: LoopKit.BasalRateSchedule,
         completion _: @escaping (Error?) -> Void
     ) {
-        self.log.debug("pumpManagerBasalRateChange")
+        debug(.deviceManager, "pumpManagerBasalRateChange")
     }
 
     func pumpManagerPumpWasReplaced(_: PumpManager) {
-        self.log.debug("pumpManagerPumpWasReplaced")
+        debug(.deviceManager, "pumpManagerPumpWasReplaced")
     }
 
     var detectedSystemTimeOffset: TimeInterval {
@@ -460,7 +460,7 @@ extension BaseDeviceDataManager: PumpManagerDelegate {
     }
 
     func pumpManager(_: PumpManager, didAdjustPumpClockBy adjustment: TimeInterval) {
-        self.log.debug("didAdjustPumpClockBy \(adjustment)")
+        debug(.deviceManager, "didAdjustPumpClockBy \(adjustment)")
     }
 
     func pumpManagerDidUpdateState(_ pumpManager: PumpManager) {
@@ -473,7 +473,7 @@ extension BaseDeviceDataManager: PumpManagerDelegate {
 
     /// heartbeat with pump occurs some issues in the backgroundtask - so never used
     func pumpManagerBLEHeartbeatDidFire(_: PumpManager) {
-        self.log.debug("Pump Heartbeat: do nothing. Pump connection is OK")
+        debug(.deviceManager, "Pump Heartbeat: do nothing. Pump connection is OK")
     }
 
     func pumpManagerMustProvideBLEHeartbeat(_: PumpManager) -> Bool {
@@ -482,8 +482,8 @@ extension BaseDeviceDataManager: PumpManagerDelegate {
 
     func pumpManager(_ pumpManager: PumpManager, didUpdate status: PumpManagerStatus, oldStatus: PumpManagerStatus) {
         dispatchPrecondition(condition: .onQueue(processQueue))
-        self.log.debug("New pump status Bolus: \(status.bolusState)")
-        self.log.debug("New pump status Basal: \(String(describing: status.basalDeliveryState))")
+        debug(.deviceManager, "New pump status Bolus: \(status.bolusState)")
+        debug(.deviceManager, "New pump status Basal: \(String(describing: status.basalDeliveryState))")
 
         switch status.bolusState {
         case .initiating:
@@ -517,7 +517,7 @@ extension BaseDeviceDataManager: PumpManagerDelegate {
         // Check if manual temp basal is active
         let manualTempBasalActive = status.basalDeliveryState?.isManualTempBasal ?? false
         if manualTempBasalActive {
-            self.log.debug("manual temp basal")
+            debug(.deviceManager, "manual temp basal")
         }
         manualTempBasal.send(manualTempBasalActive)
 
@@ -584,7 +584,7 @@ extension BaseDeviceDataManager: PumpManagerDelegate {
 
     func pumpManager(_: PumpManager, didError error: PumpManagerError) {
         dispatchPrecondition(condition: .onQueue(processQueue))
-        self.log.debug("error: \(error), reason: \(String(describing: error.failureReason))")
+        debug(.deviceManager, "error: \(error), reason: \(String(describing: error.failureReason))")
         errorSubject.send(error)
     }
 
@@ -605,12 +605,12 @@ extension BaseDeviceDataManager: PumpManagerDelegate {
                     guard let type = $0.type, type == .tempBasal else { return true }
                     return $0.dose?.unitsPerHour ?? 0 <= Double(settingsManager.pumpSettings.maxBasal)
                 }
-                self.log.debug("Storing \(events.count) new pump events: \(events)")
+                debug(.deviceManager, "Storing \(events.count) new pump events: \(events)")
                 try await pumpHistoryStorage.storePumpEvents(events)
                 lastEventDate = events.last?.date
                 completion(nil)
             } catch {
-                self.log.debug("\(DebuggingIdentifiers.failed) Failed to store pump events: \(error)")
+                debug(.deviceManager, "\(DebuggingIdentifiers.failed) Failed to store pump events: \(error)")
             }
         }
     }
@@ -625,7 +625,7 @@ extension BaseDeviceDataManager: PumpManagerDelegate {
         >) -> Void
     ) {
         dispatchPrecondition(condition: .onQueue(processQueue))
-        self.log.debug("Reservoir Value \(units), at: \(date)")
+        debug(.deviceManager, "Reservoir Value \(units), at: \(date)")
         storage.save(Decimal(units), as: OpenAPS.Monitor.reservoir)
         broadcaster.notify(PumpReservoirObserver.self, on: processQueue) {
             $0.pumpReservoirDidChange(Decimal(units))
@@ -640,7 +640,7 @@ extension BaseDeviceDataManager: PumpManagerDelegate {
 
     func pumpManagerRecommendsLoop(_: PumpManager) {
         dispatchPrecondition(condition: .onQueue(processQueue))
-        self.log.debug("Pump recommends loop")
+        debug(.deviceManager, "Pump recommends loop")
         guard let promise = pumpUpdatePromise else {
             warning(.deviceManager, "We do not waiting for loop recommendation at this time.")
             return
@@ -657,21 +657,21 @@ extension BaseDeviceDataManager: PumpManagerDelegate {
 
 extension BaseDeviceDataManager: DeviceManagerDelegate {
     func issueAlert(_ alert: Alert) {
-        self.log.debug("issueAlert \(alert.identifier.value)")
+        debug(.deviceManager, "issueAlert \(alert.identifier.value)")
         trioAlertManager.issueAlert(alert)
     }
 
     func retractAlert(identifier: Alert.Identifier) {
-        self.log.debug("retractAlert \(identifier.value)")
+        debug(.deviceManager, "retractAlert \(identifier.value)")
         trioAlertManager.retractAlert(identifier: identifier)
     }
 
     func doesIssuedAlertExist(identifier _: Alert.Identifier, completion _: @escaping (Result<Bool, Error>) -> Void) {
-        self.log.debug("doesIssueAlertExist")
+        debug(.deviceManager, "doesIssueAlertExist")
     }
 
     func lookupAllUnretracted(managerIdentifier _: String, completion _: @escaping (Result<[PersistedAlert], Error>) -> Void) {
-        self.log.debug("lookupAllUnretracted")
+        debug(.deviceManager, "lookupAllUnretracted")
     }
 
     func lookupAllUnacknowledgedUnretracted(
@@ -694,7 +694,7 @@ extension BaseDeviceDataManager: DeviceManagerDelegate {
         message: String,
         completion _: ((Error?) -> Void)?
     ) {
-        self.log.debug("Device message: \(message)")
+        debug(.deviceManager, "Device message: \(message)")
     }
 }
 
