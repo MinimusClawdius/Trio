@@ -25,7 +25,7 @@ struct TDDResult {
 }
 
 /// Implementation of the TDD Calculator
-final class BaseTDDStorage: TDDStorage, Injectable {
+final class BaseTDDStorage: TDDStorage, Injectable, @unchecked Sendable {
     @Injected() private var storage: FileStorage!
 
     private let makeContext: () -> NSManagedObjectContext

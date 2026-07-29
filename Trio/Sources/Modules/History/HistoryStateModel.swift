@@ -4,7 +4,7 @@ import Observation
 import SwiftUI
 
 extension History {
-    @Observable final class StateModel: BaseStateModel<Provider> {
+    @Observable final class StateModel: BaseStateModel<Provider>, @unchecked Sendable {
         @ObservationIgnored @Injected() var broadcaster: Broadcaster!
         @ObservationIgnored @Injected() var apsManager: APSManager!
         @ObservationIgnored @Injected() var unlockmanager: UnlockManager!
