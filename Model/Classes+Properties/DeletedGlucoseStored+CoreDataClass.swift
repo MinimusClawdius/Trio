@@ -1,4 +1,4 @@
 import CoreData
 import Foundation
 
-@objc(DeletedGlucoseStored) public class DeletedGlucoseStored: NSManagedObject, @unchecked Sendable {}
+@objc(DeletedGlucoseStored) public class DeletedGlucoseStored: NSManagedObject {}

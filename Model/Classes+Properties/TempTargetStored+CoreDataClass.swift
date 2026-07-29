@@ -1,4 +1,4 @@
 import CoreData
 import Foundation
 
-@objc(TempTargetStored) public class TempTargetStored: NSManagedObject, @unchecked Sendable {}
+@objc(TempTargetStored) public class TempTargetStored: NSManagedObject {}
