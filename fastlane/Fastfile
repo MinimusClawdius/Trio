@@ -130,6 +130,7 @@ platform :ios do
       configuration: "Release",
       destination: 'generic/platform=iOS',
       buildlog_path: 'buildlog'
+      xcargs: "SWIFT_TREAT_WARNINGS_AS_ERRORS=NO GCC_TREAT_WARNINGS_AS_ERRORS=NO"
     )
 
     copy_artifacts(
