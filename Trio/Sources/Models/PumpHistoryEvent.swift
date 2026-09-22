@@ -1,5 +1,4 @@
 import Foundation
-import LoopKit
 
 struct PumpHistoryEvent: JSON, Equatable, Identifiable {
     let id: String
@@ -17,6 +16,10 @@ struct PumpHistoryEvent: JSON, Equatable, Identifiable {
     let isSMB: Bool?
     let isExternal: Bool?
     let isExternalInsulin: Bool?
+    let isScheduledBasal: Bool?
+    let deliveredUnits: Decimal?
+    let programmedAmount: Decimal?
+    let insulinType: String?
 
     init(
         id: String,
@@ -33,7 +36,11 @@ struct PumpHistoryEvent: JSON, Equatable, Identifiable {
         note: String? = nil,
         isSMB: Bool? = nil,
         isExternal: Bool? = nil,
-        isExternalInsulin: Bool? = nil
+        isExternalInsulin: Bool? = nil,
+        isScheduledBasal: Bool? = nil,
+        deliveredUnits: Decimal? = nil,
+        programmedAmount: Decimal? = nil,
+        insulinType: String? = nil
     ) {
         self.id = id
         self.type = type
@@ -50,6 +57,10 @@ struct PumpHistoryEvent: JSON, Equatable, Identifiable {
         self.isSMB = isSMB
         self.isExternal = isExternal
         self.isExternalInsulin = isExternalInsulin
+        self.isScheduledBasal = isScheduledBasal
+        self.deliveredUnits = deliveredUnits
+        self.programmedAmount = programmedAmount
+        self.insulinType = insulinType
     }
 }
 
@@ -100,31 +111,9 @@ extension PumpHistoryEvent {
         case isSMB
         case isExternal
         case isExternalInsulin
-    }
-}
-
-extension EventType {
-    func mapEventTypeToPumpEventType() -> PumpEventType? {
-        switch self {
-        case .prime:
-            return PumpEventType.prime
-        case .pumpResume:
-            return PumpEventType.resume
-        case .rewind:
-            return PumpEventType.rewind
-        case .pumpSuspend:
-            return PumpEventType.suspend
-        case .nsBatteryChange,
-             .pumpBattery:
-            return PumpEventType.replaceComponent(componentType: .pump)
-        case .nsInsulinChange:
-            return PumpEventType.replaceComponent(componentType: .reservoir)
-        case .nsSiteChange:
-            return PumpEventType.replaceComponent(componentType: .infusionSet)
-        case .pumpAlarm:
-            return PumpEventType.alarm
-        default:
-            return nil
-        }
+        case isScheduledBasal
+        case deliveredUnits
+        case programmedAmount
+        case insulinType
     }
 }

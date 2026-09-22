@@ -27,6 +27,14 @@ struct WatchState: Hashable, Equatable, Sendable, Encodable, Decodable {
     var bolusIncrement: Decimal = 0.05
     var confirmBolusFaster: Bool = false
 
+    // Forecast options (from upstream oref-swift / home updates)
+    var showForecast: Bool = false
+    var isForecastCone: Bool = false
+    var forecastStartDate: Date? = nil
+    var forecastConeMin: [Double] = []
+    var forecastConeMax: [Double] = []
+    var forecastLines: [String: [Double]] = [:] // "iob" / "cob" / "uam" / "zt" -> values
+
     /// Remaining insulin (U) for Pebble when known; omits Trio’s “50+ U” placeholder (`0xDEAD_BEEF`).
     var pumpReservoirUnits: Double?
     /// Pump battery charge 0…100 when the pump reports it.
@@ -55,6 +63,12 @@ struct WatchState: Hashable, Equatable, Sendable, Encodable, Decodable {
             lhs.maxProtein == rhs.maxProtein &&
             lhs.bolusIncrement == rhs.bolusIncrement &&
             lhs.confirmBolusFaster == rhs.confirmBolusFaster &&
+            lhs.showForecast == rhs.showForecast &&
+            lhs.isForecastCone == rhs.isForecastCone &&
+            lhs.forecastStartDate == rhs.forecastStartDate &&
+            lhs.forecastConeMin == rhs.forecastConeMin &&
+            lhs.forecastConeMax == rhs.forecastConeMax &&
+            lhs.forecastLines == rhs.forecastLines &&
             lhs.pumpReservoirUnits == rhs.pumpReservoirUnits &&
             lhs.pumpBatteryPercent == rhs.pumpBatteryPercent
     }
@@ -83,6 +97,12 @@ struct WatchState: Hashable, Equatable, Sendable, Encodable, Decodable {
         hasher.combine(maxProtein)
         hasher.combine(bolusIncrement)
         hasher.combine(confirmBolusFaster)
+        hasher.combine(showForecast)
+        hasher.combine(isForecastCone)
+        hasher.combine(forecastStartDate)
+        hasher.combine(forecastConeMin)
+        hasher.combine(forecastConeMax)
+        hasher.combine(forecastLines)
         hasher.combine(pumpReservoirUnits)
         hasher.combine(pumpBatteryPercent)
     }

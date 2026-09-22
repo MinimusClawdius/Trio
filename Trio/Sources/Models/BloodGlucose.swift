@@ -1,6 +1,4 @@
 import Foundation
-import HealthKit
-import LoopKit
 
 struct BloodGlucose: JSON, Identifiable, Hashable, Codable {
     enum Direction: String, JSON {
@@ -277,14 +275,36 @@ extension NumberFormatter {
     }()
 }
 
-extension BloodGlucose {
-    func convertStoredGlucoseSample(isManualGlucose: Bool) -> StoredGlucoseSample {
-        StoredGlucoseSample(
-            syncIdentifier: id,
-            startDate: dateString.date,
-            quantity: HKQuantity(unit: .milligramsPerDeciliter, doubleValue: Double(glucose!)),
-            wasUserEntered: isManualGlucose,
-            device: HKDevice.local()
-        )
+/// Spells out compact unit abbreviations for VoiceOver so screen readers don't voice
+/// "mg/dL" as letters or "U" as "you". Compound units (e.g. "mg/dL/U", "g/U", "U/hr")
+/// are split on "/" and joined with "per", so each token only needs a single mapping.
+enum UnitSpelling {
+    private static let tokens: [String: String] = [
+        "mg": String(localized: "milligrams", comment: "Accessibility: spoken unit"),
+        "dL": String(localized: "deciliter", comment: "Accessibility: spoken unit"),
+        "mmol": String(localized: "millimoles", comment: "Accessibility: spoken unit"),
+        "L": String(localized: "liter", comment: "Accessibility: spoken unit"),
+        "U": String(localized: "units", comment: "Accessibility: spoken unit"),
+        "g": String(localized: "grams", comment: "Accessibility: spoken unit"),
+        "hr": String(localized: "hour", comment: "Accessibility: spoken unit"),
+        "min": String(localized: "minutes", comment: "Accessibility: spoken unit"),
+        "%": String(localized: "percent", comment: "Accessibility: spoken unit")
+    ]
+
+    /// Returns a spoken form of a unit string, e.g. "mg/dL/U" -> "milligrams per deciliter per units".
+    /// Unknown tokens pass through unchanged.
+    static func spoken(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return "" }
+        let separator = " " + String(localized: "per", comment: "Accessibility: unit separator, as in grams per unit") + " "
+        return trimmed
+            .split(separator: "/", omittingEmptySubsequences: true)
+            .map { tokens[String($0)] ?? String($0) }
+            .joined(separator: separator)
     }
+}
+
+extension GlucoseUnits {
+    /// Spoken glucose unit for VoiceOver ("milligrams per deciliter" / "millimoles per liter").
+    var spokenValue: String { UnitSpelling.spoken(rawValue) }
 }

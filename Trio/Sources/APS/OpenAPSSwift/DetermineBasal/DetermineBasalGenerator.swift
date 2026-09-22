@@ -389,6 +389,7 @@ enum DeterminationGenerator {
             carbRatio: forecastResult.adjustedCarbRatio.jsRounded(scale: 1),
             received: false
         )
+        determination.cobProjection = forecastResult.cobProjection
 
         // MARK: - Core dosing logic
 
@@ -409,6 +410,11 @@ enum DeterminationGenerator {
         determination = lowGlucoseSuspendDetermination
         if shouldSetTempBasalForLowGlucoseSuspend {
             return determination
+        }
+
+        // basal testing acts only on the low handled above; every stage below moves the curve
+        if profile.suspendOnly {
+            return DosingEngine.recommendNoChange(determination: determination)
         }
 
         let (shouldSetTempBasalForSkipNeutralTemp, skipNeutralTempDetermination) = try DosingEngine.skipNeutralTempBasal(

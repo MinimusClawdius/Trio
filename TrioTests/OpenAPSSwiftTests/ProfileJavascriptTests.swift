@@ -11,9 +11,7 @@ struct ProfileGeneratorTests {
         InsulinSensitivities,
         Preferences,
         CarbRatios,
-        [TempTarget],
-        String,
-        TrioSettings
+        [TempTarget]
     ) {
         let pumpSettings = PumpSettings(
             insulinActionCurve: 10,
@@ -51,10 +49,8 @@ struct ProfileGeneratorTests {
         )
 
         let tempTargets: [TempTarget] = []
-        let model = "523"
-        let trioSettings = TrioSettings()
 
-        return (pumpSettings, bgTargets, basalProfile, isf, preferences, carbRatios, tempTargets, model, trioSettings)
+        return (pumpSettings, bgTargets, basalProfile, isf, preferences, carbRatios, tempTargets)
     }
 
     @Test("Basic profile generation should create profile with correct values") func testBasicProfileGeneration() throws {
@@ -68,7 +64,6 @@ struct ProfileGeneratorTests {
             preferences: inputs.4,
             carbRatios: inputs.5,
             tempTargets: inputs.6,
-            model: inputs.7,
             clock: Date()
         )
 
@@ -111,7 +106,6 @@ struct ProfileGeneratorTests {
             preferences: inputs.4,
             carbRatios: inputs.5,
             tempTargets: inputs.6,
-            model: inputs.7,
             clock: currentTime
         )
 
@@ -155,7 +149,6 @@ struct ProfileGeneratorTests {
             preferences: inputs.4,
             carbRatios: inputs.5,
             tempTargets: inputs.6,
-            model: inputs.7,
             clock: currentTime
         )
 
@@ -198,7 +191,6 @@ struct ProfileGeneratorTests {
             preferences: inputs.4,
             carbRatios: inputs.5,
             tempTargets: inputs.6,
-            model: inputs.7,
             clock: currentTime
         )
 
@@ -228,7 +220,6 @@ struct ProfileGeneratorTests {
                 preferences: inputs.4,
                 carbRatios: inputs.5,
                 tempTargets: inputs.6,
-                model: inputs.7,
                 clock: Date()
             )
         }
@@ -251,28 +242,8 @@ struct ProfileGeneratorTests {
                 preferences: inputs.4,
                 carbRatios: inputs.5,
                 tempTargets: inputs.6,
-                model: inputs.7,
                 clock: Date()
             )
         }
-    }
-
-    @Test("Profile should store model string correctly") func testModelString() throws {
-        var inputs = createBaseInputs()
-        inputs.7 = "\"554\"\n"
-
-        let profile = try ProfileGenerator.generate(
-            pumpSettings: inputs.0,
-            bgTargets: inputs.1,
-            basalProfile: inputs.2,
-            isf: inputs.3,
-            preferences: inputs.4,
-            carbRatios: inputs.5,
-            tempTargets: inputs.6,
-            model: inputs.7,
-            clock: Date()
-        )
-
-        #expect(profile.model == "554")
     }
 }

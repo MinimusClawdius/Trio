@@ -39,8 +39,6 @@ final class BaseFetchGlucoseManager: FetchGlucoseManager, Injectable {
     @Injected() var broadcaster: Broadcaster!
     @Injected() var glucoseStorage: GlucoseStorage!
     @Injected() var nightscoutManager: NightscoutManager!
-    @Injected() var tidepoolService: TidepoolManager!
-    @Injected() var apsManager: APSManager!
     @Injected() var settingsManager: SettingsManager!
     @Injected() var healthKitManager: HealthKitManager!
     @Injected() var deviceDataManager: DeviceDataManager!
@@ -247,12 +245,14 @@ final class BaseFetchGlucoseManager: FetchGlucoseManager, Injectable {
                 glucoseSource = nightscoutManager
             case .simulator:
                 glucoseSource = simulatorSource
-            case .enlite:
-                glucoseSource = deviceDataManager
             case .plugin:
                 glucoseSource = PluginSource(glucoseStorage: glucoseStorage, glucoseManager: self)
             }
         }
+
+        // Only an active plugin CGM with its own BLE connection can wake the app; otherwise the pump must heartbeat
+        let cgmProvidesHeartbeat = cgmGlucoseSourceType == .plugin && (cgmManager?.providesBLEHeartbeat ?? false)
+        deviceDataManager.updateCGMHeartbeatCapability(providesBLEHeartbeat: cgmProvidesHeartbeat)
     }
 
     /// Upload cgmManager from raw value
@@ -308,7 +308,15 @@ final class BaseFetchGlucoseManager: FetchGlucoseManager, Injectable {
             await exponentialSmoothingGlucose(context: smoothingContext)
         }
 
+        // Push the fresh reading schedule so the pump can align its BLE heartbeat
+        deviceDataManager.updatePumpBLEHeartbeat(
+            lastCGMReadingDate: filtered.map(\.dateString).max(),
+            expectedCGMReadingInterval: cgmManager?.expectedGlucoseSampleInterval
+        )
+
         deviceDataManager.heartbeat(date: Date())
+
+        TelemetryClient.shared.checkAndSendIfOverdueInBackground()
 
         endBackgroundTaskSafely(&backgroundTaskID, taskName: "Glucose Store and Heartbeat Decision")
     }
