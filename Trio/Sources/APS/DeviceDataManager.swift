@@ -738,3 +738,23 @@ protocol PumpDeactivatedObserver {
 }
 
 
+func appendToRileyLog(_ message: String) {
+    let fileURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("riley_link_debug.log")
+    let line = "\\(Date()) - \(message)\\n"
+    try? line.appendToURL(fileURL)
+}
+
+extension String {
+    func appendToURL(_ fileURL: URL) throws {
+        if let data = self.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: fileURL.path) {
+                let fileHandle = try FileHandle(forWritingTo: fileURL)
+                fileHandle.seekToEndOfFile()
+                fileHandle.write(data)
+                fileHandle.closeFile()
+            } else {
+                try data.write(to: fileURL, options: .atomic)
+            }
+        }
+    }
+}
