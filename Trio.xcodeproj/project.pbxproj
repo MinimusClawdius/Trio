@@ -980,6 +980,8 @@
 				3B4BA7752D8DBD690069D5B8 /* LibreTransmitter.framework in Embed Frameworks */,
 				3B4BA7772D8DBD690069D5B8 /* LibreTransmitterUI.framework in Embed Frameworks */,
 				5E12FE0E2EBC0000000000C1 /* LibreLoop.framework in Embed Frameworks */,
+				5E12FE0E2EBC0000000000C2 /* LibreLoopUI.framework in Embed Frameworks */
+				5E12FE0E2EBC0000000000C1 /* LibreLoop.framework in Embed Frameworks */,
 				5E12FE0E2EBC0000000000C2 /* LibreLoopUI.framework in Embed Frameworks */,
 				3B4BA77B2D8DBD690069D5B8 /* MinimedKitUI.framework in Embed Frameworks */,
 				3B4BA7832D8DBD690069D5B8 /* RileyLinkBLEKit.framework in Embed Frameworks */,
