@@ -238,6 +238,9 @@
 		5E12FE0E2EBC0000000000C1 /* LibreLoop.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 5E12FE0E2EBC0000000000A1 /* LibreLoop.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		5E12FE0E2EBC0000000000B2 /* LibreLoopUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5E12FE0E2EBC0000000000A2 /* LibreLoopUI.framework */; };
 		5E12FE0E2EBC0000000000C2 /* LibreLoopUI.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 5E12FE0E2EBC0000000000A2 /* LibreLoopUI.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		5E12FE112EBC0000000000A2 /* LoopAlgorithm in Frameworks */ = {isa = PBXBuildFile; productRef = 5E12FE112EBC0000000000A1 /* LoopAlgorithm */; };
+		5E12FE112EBC0000000000B2 /* LibreCRKit in Frameworks */ = {isa = PBXBuildFile; productRef = 5E12FE112EBC0000000000B1 /* LibreCRKit */; };
+
 
 		3B4BA7772D8DBD690069D5B8 /* LibreTransmitterUI.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3B4BA7612D8DBD690069D5B8 /* LibreTransmitterUI.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		3B4BA7782D8DBD690069D5B8 /* MinimedKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3B4BA7622D8DBD690069D5B8 /* MinimedKit.framework */; };
@@ -4800,6 +4803,14 @@
 				BD8207C22D2B42E50023339D /* Trio Watch Complication Extension */,
 			);
 		};
+		5E12FE112EBC0000000000A0 /* XCLocalSwiftPackageReference "LoopAlgorithm" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = LoopAlgorithm;
+		};
+		5E12FE112EBC0000000000B0 /* XCLocalSwiftPackageReference "LibreCRKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = LibreCRKit;
+		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
@@ -6577,6 +6588,8 @@
 			package = DD868FD92E381E1C005D3308 /* XCRemoteSwiftPackageReference "Swift-JWT" */;
 			productName = SwiftJWT;
 		};
+		5E12FE112EBC0000000000A1 /* LoopAlgorithm */ = {isa = XCSwiftPackageProductDependency; package = 5E12FE112EBC0000000000A0 /* XCLocalSwiftPackageReference "LoopAlgorithm" */; productName = LoopAlgorithm; };
+		5E12FE112EBC0000000000B1 /* LibreCRKit */ = {isa = XCSwiftPackageProductDependency; package = 5E12FE112EBC0000000000B0 /* XCLocalSwiftPackageReference "LibreCRKit" */; productName = LibreCRKit; };
 /* End XCSwiftPackageProductDependency section */
 
 /* Begin XCVersionGroup section */
