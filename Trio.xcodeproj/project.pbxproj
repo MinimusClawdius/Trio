@@ -234,8 +234,11 @@
 		3B4BA7742D8DBD690069D5B8 /* LibreTransmitter.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3B4BA7602D8DBD690069D5B8 /* LibreTransmitter.framework */; };
 		3B4BA7752D8DBD690069D5B8 /* LibreTransmitter.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3B4BA7602D8DBD690069D5B8 /* LibreTransmitter.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		3B4BA7762D8DBD690069D5B8 /* LibreTransmitterUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3B4BA7612D8DBD690069D5B8 /* LibreTransmitterUI.framework */; };
-		5E12FE0E2EBC0000000000B1 /* LibreLoop.framework in Frameworks */ = {isa = PBXBuildFile; 		5E12FE0E2EBC0000000000C1 /* LibreLoop.framework in Embed Frameworks */ = {isa = PBXBuildFile; 		5E12FE0E2EBC0000000000B2 /* LibreLoopUI.framework in Frameworks */ = {isa = PBXBuildFile; 		5E12FE0E2EBC0000000000C2 /* LibreLoopUI.framework in Embed Frameworks */ = {isa = PBXBuildFile; 
-		5E12FE112EBC0000000000A2 /* LoopAlgorithm in Frameworks */ = {isa = PBXBuildFile; productRef = 5E12FE112EBC0000000000A1 /* LoopAlgorithm */; };
+		5E12FE0E2EBC0000000000B1 /* LibreLoop.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5E12FE0E2EBC0000000000A1 /* LibreLoop.framework */; };
+		5E12FE0E2EBC0000000000C1 /* LibreLoop.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 5E12FE0E2EBC0000000000A1 /* LibreLoop.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		5E12FE0E2EBC0000000000B2 /* LibreLoopUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5E12FE0E2EBC0000000000A2 /* LibreLoopUI.framework */; };
+		5E12FE0E2EBC0000000000C2 /* LibreLoopUI.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 5E12FE0E2EBC0000000000A2 /* LibreLoopUI.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+
 		5E12FE112EBC0000000000B2 /* LibreCRKit in Frameworks */ = {isa = PBXBuildFile; productRef = 5E12FE112EBC0000000000B1 /* LibreCRKit */; };
 
 
@@ -981,8 +984,7 @@
 				3B4BA7772D8DBD690069D5B8 /* LibreTransmitterUI.framework in Embed Frameworks */,
 				5E12FE0E2EBC0000000000C1 /* LibreLoop.framework in Embed Frameworks */,
 				5E12FE0E2EBC0000000000C2 /* LibreLoopUI.framework in Embed Frameworks */,
-			);
-		name = "Embed Frameworks";
+name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		38E8753D27554D5900975559 /* Embed Watch Content */ = {
@@ -1934,6 +1936,8 @@ explicitFileType = wrapper.framework; path = LibreLoopUI.framework; sourceTree =
 				CE95BF632BA771BE00DC3DE3 /* LoopTestingKit.framework in Frameworks */,
 				3B4BA7722D8DBD690069D5B8 /* G7SensorKitUI.framework in Frameworks */,
 				3B4BA7742D8DBD690069D5B8 /* LibreTransmitter.framework in Frameworks */,
+				5E12FE0E2EBC0000000000B1 /* LibreLoop.framework in Frameworks */,
+				5E12FE0E2EBC0000000000B2 /* LibreLoopUI.framework in Frameworks */,
 				3B4BA78C2D8DC0EC0069D5B8 /* ShareClientUI.framework in Frameworks */,
 				3B4BA77A2D8DBD690069D5B8 /* MinimedKitUI.framework in Frameworks */,
 				3BD9687C2D8DDD4600899469 /* SlideButton in Frameworks */,
