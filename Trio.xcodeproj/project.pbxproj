@@ -4710,8 +4710,7 @@
 				38DF178E27733E6800B3528F /* Assets.xcassets in Resources */,
 				19DA48E829CD339B00EEA1E7 /* Assets.xcassets in Resources */,
 				8A91342A2D63D9A1007F8874 /* Localizable.xcstrings in Resources */,
-				388E596F25AD96040019842D /* javascript in Resources */,
-				BD1179342F4E22C100F90001 /* Sounds in Resources */,
+								BD1179342F4E22C100F90001 /* Sounds in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
