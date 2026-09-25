@@ -1105,8 +1105,7 @@
 		383420D525FFE38C002D46C1 /* LoopView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoopView.swift; sourceTree = "<group>"; };
 		383420D825FFEB3F002D46C1 /* Popup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Popup.swift; sourceTree = "<group>"; };
 		383948D525CD4D8900E91849 /* FileStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileStorage.swift; sourceTree = "<group>"; };
- lastKnownFileType = sourcecode.swift; path = JavaScriptWorker.swift; sourceTree = "<group>"; };
-		384E803725C388640086DB71 /* Script.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Script.swift; sourceTree = "<group>"; };
+384E803725C388640086DB71 /* Script.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Script.swift; sourceTree = "<group>"; };
 		38569344270B5DFA0002C50D /* CGMType.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CGMType.swift; sourceTree = "<group>"; };
 		38569345270B5DFA0002C50D /* GlucoseSource.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GlucoseSource.swift; sourceTree = "<group>"; };
 		38569346270B5DFB0002C50D /* AppGroupSource.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppGroupSource.swift; sourceTree = "<group>"; };
@@ -1305,7 +1304,7 @@
 		3B5CD2942D4AEA3C00CE213C /* ProfileError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileError.swift; sourceTree = "<group>"; };
 		3B5CD2952D4AEA3C00CE213C /* ProfileGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileGenerator.swift; sourceTree = "<group>"; };
 		3B5CD2962D4AEA3C00CE213C /* Targets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Targets.swift; sourceTree = "<group>"; };
- lastKnownFileType = sourcecode.swift; path = JavascriptOptional.swift; sourceTree = "<group>"; };
+
 		3B5CD2A32D4AEA5D00CE213C /* Date+MinutesFromMidnight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+MinutesFromMidnight.swift"; sourceTree = "<group>"; };
 		3B5CD2A72D4AEA6600CE213C /* ComputedBGTargets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputedBGTargets.swift; sourceTree = "<group>"; };
 		3B5CD2AD2D4AEA6600CE213C /* ComputedInsulinSensitivities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputedInsulinSensitivities.swift; sourceTree = "<group>"; };
@@ -1313,7 +1312,7 @@
 		3B5CD2C12D4AECD500CE213C /* ProfileBasalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileBasalTests.swift; sourceTree = "<group>"; };
 		3B5CD2C32D4AECD500CE213C /* ProfileCarbsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileCarbsTests.swift; sourceTree = "<group>"; };
 		3B5CD2C42D4AECD500CE213C /* ProfileIsfTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileIsfTests.swift; sourceTree = "<group>"; };
- lastKnownFileType = sourcecode.swift; path = ProfileJavascriptTests.swift; sourceTree = "<group>"; };
+
 		3B5CD2C62D4AECD500CE213C /* ProfileTargetsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileTargetsTests.swift; sourceTree = "<group>"; };
 		3B5F45B52D6A239000F70982 /* DoubleApproximateMatching.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoubleApproximateMatching.swift; sourceTree = "<group>"; };
 		3B8221B12E5882D900585156 /* DetermineBasalEarlyExitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetermineBasalEarlyExitTests.swift; sourceTree = "<group>"; };
