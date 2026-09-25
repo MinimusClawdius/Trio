@@ -5028,7 +5028,9 @@
 				38569347270B5DFB0002C50D /* CGMType.swift in Sources */,
 				DD485F182E466F1800CE8CBF /* SecureMessenger.swift in Sources */,
 				3821ED4C25DD18BA00BC42AD /* Constants.swift in Sources */,
-					runOnlyForDeploymentPostprocessing = 0;
+
+			);
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 		38FCF3E925E9028E0078B0D1 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -5037,7 +5039,9 @@
 				3B5CD2C92D4AECD500CE213C /* ProfileCarbsTests.swift in Sources */,
 				3BEDC9932EEB27B600AC6492 /* IobConsecutiveEventsTests.swift in Sources */,
 				3B1DB90F2E63C14C00BD814B /* DetermineBasalLowEventualGlucoseTests.swift in Sources */,
-					runOnlyForDeploymentPostprocessing = 0;
+
+			);
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 		6B1A8D132B14D91500E76752 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
