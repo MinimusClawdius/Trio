@@ -2734,7 +2734,8 @@
 			isa = PBXGroup;
 			children = (
 				388E596B25AD95110019842D /* OpenAPS.swift */,
-					path = OpenAPS;
+			);
+			path = OpenAPS;
 			sourceTree = "<group>";
 		};
 		BD11795B2F4E22C100F90001 /* GlucoseAlerts */ = {
@@ -3101,7 +3102,8 @@
 		3B5CD2A02D4AEA5100CE213C /* Utils */ = {
 			isa = PBXGroup;
 			children = (
-					path = Utils;
+			);
+			path = Utils;
 			sourceTree = "<group>";
 		};
 		3B5CD2A42D4AEA5D00CE213C /* Extensions */ = {
@@ -3165,7 +3167,9 @@
 				3B5CD2C12D4AECD500CE213C /* ProfileBasalTests.swift */,
 				3B5CD2C32D4AECD500CE213C /* ProfileCarbsTests.swift */,
 				3B5CD2C42D4AECD500CE213C /* ProfileIsfTests.swift */,
-					path = OpenAPSSwiftTests;
+			);
+			path = OpenAPSSwiftTests;
+
 			sourceTree = "<group>";
 		};
 		3B997DD22DC02AEF006B6BB2 /* JSONImporterData */ = {
