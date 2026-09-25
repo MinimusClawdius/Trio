@@ -4610,21 +4610,21 @@
 				TargetAttributes = {
 					388E595725AD948C0019842D = {
 						CreatedOnToolsVersion = 12.3;
-					};
+		};
 					38FCF3EC25E9028E0078B0D1 = {
 						CreatedOnToolsVersion = 12.4;
 						TestTargetID = 388E595725AD948C0019842D;
-					};
+		};
 					BD8207C22D2B42E50023339D = {
 						CreatedOnToolsVersion = 16.2;
-					};
+		};
 					BDFF797B2D25AA870016C40C = {
 						CreatedOnToolsVersion = 16.2;
-					};
+		};
 					BDFF798A2D25AA890016C40C = {
 						CreatedOnToolsVersion = 16.2;
 						TestTargetID = BDFF797B2D25AA870016C40C;
-					};
+		};
 				};
 			};
 			buildConfigurationList = 388E595325AD948C0019842D /* Build configuration list for PBXProject "Trio" */;
@@ -5028,8 +5028,9 @@
 				38569347270B5DFB0002C50D /* CGMType.swift in Sources */,
 				DD485F182E466F1800CE8CBF /* SecureMessenger.swift in Sources */,
 				3821ED4C25DD18BA00BC42AD /* Constants.swift in Sources */,
-
 			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		38FCF3E925E9028E0078B0D1 /* Sources */ = {
@@ -5039,8 +5040,9 @@
 				3B5CD2C92D4AECD500CE213C /* ProfileCarbsTests.swift in Sources */,
 				3BEDC9932EEB27B600AC6492 /* IobConsecutiveEventsTests.swift in Sources */,
 				3B1DB90F2E63C14C00BD814B /* DetermineBasalLowEventualGlucoseTests.swift in Sources */,
-
 			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		6B1A8D132B14D91500E76752 /* Sources */ = {
