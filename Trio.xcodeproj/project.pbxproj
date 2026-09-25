@@ -5031,7 +5031,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 		38FCF3E925E9028E0078B0D1 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -5043,7 +5042,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 		6B1A8D132B14D91500E76752 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
