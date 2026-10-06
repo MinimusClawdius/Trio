@@ -173,79 +173,90 @@ puts "Saving repaired project..."
 project.save
 puts "Project saved successfully. Repair complete."
 
+
 # ============================================================
-# 4. Pebble integration using proper xcodeproj API (repairs any text-edit damage from add script)
+# 4. Pebble integration - clean remove then add using xcodeproj API
+#    This guarantees the pbxproj text is emitted cleanly without
+#    any previous text-edit corruption or missing commas.
 # ============================================================
-puts "Ensuring Pebble groups and files are correctly attached via API..."
+puts "Performing clean Pebble integration (remove stale + fresh add)..."
 
 services_group = project.main_group.recursive_children_groups.find do |g|
   (g.path && g.path == "Services") || (g.name && g.name == "Services")
 end
 
-if services_group
-  puts "Found Services group"
-
-  pm_group = services_group.children.find { |c| (c.respond_to?(:path) && c.path == "PebbleManager") || (c.respond_to?(:name) && c.name == "PebbleManager") }
-  if pm_group.nil?
-    pm_group = project.new_group("PebbleManager", "PebbleManager")
-    services_group.children << pm_group
-    puts "Created PebbleManager subgroup"
-  end
-
-  ps_group = services_group.children.find { |c| (c.respond_to?(:path) && c.path == "PebbleService") || (c.respond_to?(:name) && c.name == "PebbleService") }
-  if ps_group.nil?
-    ps_group = project.new_group("PebbleService", "PebbleService")
-    services_group.children << ps_group
-    puts "Created PebbleService subgroup"
-  end
-
-  pebble_files = [
-    "Trio/Sources/Services/PebbleManager/PebbleManager.swift",
-    "Trio/Sources/Services/PebbleManager/PebbleDataBridge.swift",
-    "Trio/Sources/Services/PebbleManager/PebbleCommandManager.swift",
-    "Trio/Sources/Services/PebbleManager/PebbleCommandConfirmationView.swift",
-    "Trio/Sources/Services/PebbleManager/PebbleLocalAPIServer.swift",
-    "Trio/Sources/Services/PebbleManager/PebbleAppMessageKeys.swift",
-    "Trio/Sources/Services/PebbleManager/PebbleBLEBridge.swift",
-    "Trio/Sources/Services/PebbleService/PebbleService.swift",
-    "Trio/Sources/Services/PebbleService/PebbleServiceManager.swift",
-    "Trio/Sources/Services/PebbleService/PebbleServiceFormView.swift",
-    "Trio/Sources/Services/PebbleService/PebbleService+UI.swift"
-  ]
-
-  main_target = project.targets.find { |t| t.name.to_s == "Trio" }
-  source_phase = main_target&.source_build_phase
-
-  pebble_files.each do |rel|
-    next unless File.exist?(rel)
-    basename = File.basename(rel)
-    file_ref = project.files.find { |f| f.path && f.path.end_with?(basename) }
-    target_group = rel.include?("PebbleManager") ? pm_group : ps_group
-
-    if file_ref.nil?
-      file_ref = project.add_file(rel, target_group)
-      puts "Added fresh FileRef #{basename}"
-    else
-      unless target_group.children.include?(file_ref)
-        target_group.children << file_ref
-        puts "Moved #{basename} into correct Pebble group"
-      end
-    end
-
-    if source_phase && file_ref
-      unless source_phase.files.any? { |bf| bf.file_ref == file_ref rescue false }
-        source_phase.add_file_reference(file_ref, true)
-        puts "Wired #{basename} to Trio source phase"
-      end
-    end
-  end
-else
-  puts "WARNING: Services group not found for Pebble"
+if services_group.nil?
+  puts "WARNING: Services group not found, creating it"
+  services_group = project.new_group("Services", "Services")
+  project.main_group.children << services_group
 end
 
-puts "Pebble API repair done."
+# Remove any existing Pebble subgroups and their file refs to start clean
+["PebbleManager", "PebbleService"].each do |gname|
+  existing = services_group.children.find { |c| (c.respond_to?(:path) && c.path == gname) || (c.respond_to?(:name) && c.name == gname) }
+  if existing
+    # Remove file refs from build phases first
+    project.targets.each do |t|
+      phase = t.source_build_phase
+      if phase
+        existing.children.to_a.each do |fr|
+          phase.files.each do |bf|
+            if bf.file_ref == fr
+              phase.remove_file_reference(fr) rescue nil
+            end
+          end
+        end
+      end
+    end
+    services_group.children.delete(existing)
+    puts "Removed stale #{gname} group"
+  end
+end
 
+# Create fresh subgroups
+pm_group = project.new_group("PebbleManager", "PebbleManager")
+services_group.children << pm_group
+ps_group = project.new_group("PebbleService", "PebbleService")
+services_group.children << ps_group
+puts "Created fresh Pebble subgroups"
 
+pebble_files = [
+  { path: "Trio/Sources/Services/PebbleManager/PebbleManager.swift", group: pm_group },
+  { path: "Trio/Sources/Services/PebbleManager/PebbleDataBridge.swift", group: pm_group },
+  { path: "Trio/Sources/Services/PebbleManager/PebbleCommandManager.swift", group: pm_group },
+  { path: "Trio/Sources/Services/PebbleManager/PebbleCommandConfirmationView.swift", group: pm_group },
+  { path: "Trio/Sources/Services/PebbleManager/PebbleLocalAPIServer.swift", group: pm_group },
+  { path: "Trio/Sources/Services/PebbleManager/PebbleAppMessageKeys.swift", group: pm_group },
+  { path: "Trio/Sources/Services/PebbleManager/PebbleBLEBridge.swift", group: pm_group },
+  { path: "Trio/Sources/Services/PebbleService/PebbleService.swift", group: ps_group },
+  { path: "Trio/Sources/Services/PebbleService/PebbleServiceManager.swift", group: ps_group },
+  { path: "Trio/Sources/Services/PebbleService/PebbleServiceFormView.swift", group: ps_group },
+  { path: "Trio/Sources/Services/PebbleService/PebbleService+UI.swift", group: ps_group }
+]
+
+main_target = project.targets.find { |t| t.name.to_s == "Trio" }
+source_phase = main_target&.source_build_phase
+
+pebble_files.each do |entry|
+  rel = entry[:path]
+  target_group = entry[:group]
+  next unless File.exist?(rel)
+
+  basename = File.basename(rel)
+  # Always add fresh via the API (it handles quoting for + in filenames)
+  file_ref = project.add_file(rel, target_group)
+  puts "Added (or re-added) #{basename} via add_file"
+
+  if source_phase && file_ref
+    # Ensure it is in the build phase
+    unless source_phase.files.any? { |bf| (bf.file_ref == file_ref) rescue false }
+      source_phase.add_file_reference(file_ref, true)
+      puts "Wired #{basename} to main target source phase"
+    end
+  end
+end
+
+puts "Pebble clean integration complete."
 # ============================================================
 # 5. Force clean re-serialization of Appearance and Network groups
 #    (the text corruption "Network = {" inside Appearance children was introduced by
