@@ -276,8 +276,8 @@ jobs:
       - name: Repair pbxproj
         run: |
           echo "Running repair_pbxproj.rb to clean any broken BuildFiles/groups from merges/add_pebble script"
-          bundle exec ruby scripts/repair_pbxproj.rb || true
-          echo "Repair completed (or script not present/required)"
+          bundle exec ruby scripts/repair_pbxproj.rb
+          echo "Repair completed"
 
       - name: Fastlane Build & Archive
         run: bundle exec fastlane build_trio
