@@ -285,3 +285,32 @@ else
 end
 
 puts "Appearance/Network clean re-serialization complete."
+
+# ============================================================
+# 6. Force re-creation of Services group to ensure clean children list after Pebble additions
+#    (prevents "Array missing ',' " from any insertion order or previous state)
+# ============================================================
+puts "Force re-serializing Services group for clean output..."
+
+services = project.main_group.recursive_children_groups.find do |g|
+  (g.path && g.path == "Services") || (g.name && g.name == "Services")
+end
+
+if services
+  parent = services.parent || project.main_group
+  if parent.children.include?(services)
+    # Collect current children
+    kids = services.children.to_a
+    parent.children.delete(services)
+    new_services = project.new_group("Services", "Services")
+    kids.each { |k| new_services.children << k }
+    parent.children << new_services
+    puts "Re-created Services group with #{kids.size} children for clean plist"
+  end
+end
+
+puts "Services re-serialization complete."
+
+puts "Final save after all repairs..."
+project.save
+puts "Final save complete."
