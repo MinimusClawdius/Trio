@@ -991,17 +991,28 @@
 		FE66D16B291F74F8005D6F77 /* Bundle+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE66D16A291F74F8005D6F77 /* Bundle+Extensions.swift */; };
 		7A11AC0DE000000000000030 /* UIHostingController+KeyboardSafeArea.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A11AC0DE000000000000130 /* UIHostingController+KeyboardSafeArea.swift */; };
 		FEFFA7A22929FE49007B8193 /* UIDevice+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEFFA7A12929FE49007B8193 /* UIDevice+Extensions.swift */; };
-		7D397AF3B8223522012ADB07 /* PebbleAppMessageKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = A53F60AA0A75534C350B0348; };
-		A4A10E9D765236FCDDE2F8DD /* PebbleBLEBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02A3F929FDA541788CB6BF75; };
-		EBC6B3F722F317D0C390EF57 /* PebbleCommandConfirmationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11B90D5F3937F6EA47F21AD8; };
-		90CC249A1EFE38E097236049 /* PebbleCommandManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15281D78551E3A69EAF2875E; };
-		F67222FB56687D837949F478 /* PebbleDataBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE92E93A30FD36B1FF07859D; };
-		3E7DCC9C101DC99E49082650 /* PebbleLocalAPIServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA7E7658142804AFED366CE1; };
-		FA0047D87047BDDB20DD7DAD /* PebbleManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84075E0063841560E4A2ECF0; };
-		C22D95BB5D62493EF1D9B800 /* PebbleServiceFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F5CF6BCD6CEAB9DF85CBB4C; };
-		3D46FA8D1904EF501038822D /* PebbleServiceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAC332A27642C448D1595042; };
-		5B0A971579943A894C56BA03 /* PebbleService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 133F556755EEE38E81AF3AA3; };
-		7D5D913219707D9E120E629E /* PebbleService+UI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF81A4FAEA31AE164380A3A; };
+
+
+
+
+
+
+
+
+
+
+
+		42DDB53699E3315F687FF9FF /* PebbleAppMessageKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACA020DDCBA512080912924E; };
+		B0280ACB187350A9FF31E9F6 /* PebbleBLEBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D582F8F82F7E75439DF18B5; };
+		9CF28CC4C6ABA0C13D18AB4C /* PebbleCommandConfirmationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAD79BB45F121DF7CE45606; };
+		ECF1652F41478EA5B643BDF5 /* PebbleCommandManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1633E18FEC5A504BC4086DED; };
+		774B9E3E3128710E13C4608A /* PebbleDataBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACE5C961ED848507623724D5; };
+		6E450165450824BECF825BF3 /* PebbleLocalAPIServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4045F59A6B31577FE4BDE677; };
+		4D84FDF5E21B532411B4AC06 /* PebbleManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67640D49AB38E9B02FE3F304; };
+		41CAA50E6E7A60A4216DDDDF /* PebbleServiceFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC958FDD5BE51208450608E5; };
+		F6338D20461CF1EBC63BA1BC /* PebbleServiceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47C15642B76991FAB4C6D303; };
+		B63AD94930C5B85C68641C66 /* PebbleService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9B9E2BE2F5B8EE383F5CA77; };
+		6BE8DF2B8D83AB9D67AD17AF /* PebbleService+UI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78B336463B10DB453719B218; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -2085,17 +2096,28 @@
 		FE66D16A291F74F8005D6F77 /* Bundle+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Bundle+Extensions.swift"; sourceTree = "<group>"; };
 		7A11AC0DE000000000000130 /* UIHostingController+KeyboardSafeArea.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIHostingController+KeyboardSafeArea.swift"; sourceTree = "<group>"; };
 		FEFFA7A12929FE49007B8193 /* UIDevice+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIDevice+Extensions.swift"; sourceTree = "<group>"; };
-		A53F60AA0A75534C350B0348 /* PebbleAppMessageKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleAppMessageKeys.swift; sourceTree = "<group>"; };
-		02A3F929FDA541788CB6BF75 /* PebbleBLEBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleBLEBridge.swift; sourceTree = "<group>"; };
-		11B90D5F3937F6EA47F21AD8 /* PebbleCommandConfirmationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleCommandConfirmationView.swift; sourceTree = "<group>"; };
-		15281D78551E3A69EAF2875E /* PebbleCommandManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleCommandManager.swift; sourceTree = "<group>"; };
-		AE92E93A30FD36B1FF07859D /* PebbleDataBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleDataBridge.swift; sourceTree = "<group>"; };
-		BA7E7658142804AFED366CE1 /* PebbleLocalAPIServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleLocalAPIServer.swift; sourceTree = "<group>"; };
-		84075E0063841560E4A2ECF0 /* PebbleManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleManager.swift; sourceTree = "<group>"; };
-		3F5CF6BCD6CEAB9DF85CBB4C /* PebbleServiceFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleServiceFormView.swift; sourceTree = "<group>"; };
-		EAC332A27642C448D1595042 /* PebbleServiceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleServiceManager.swift; sourceTree = "<group>"; };
-		133F556755EEE38E81AF3AA3 /* PebbleService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleService.swift; sourceTree = "<group>"; };
-		2CF81A4FAEA31AE164380A3A /* PebbleService+UI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PebbleService+UI.swift; sourceTree = "<group>"; };
+
+
+
+
+
+
+
+
+
+
+
+		ACA020DDCBA512080912924E /* PebbleAppMessageKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PebbleAppMessageKeys.swift"; sourceTree = "<group>"; };
+		5D582F8F82F7E75439DF18B5 /* PebbleBLEBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PebbleBLEBridge.swift"; sourceTree = "<group>"; };
+		AAAD79BB45F121DF7CE45606 /* PebbleCommandConfirmationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PebbleCommandConfirmationView.swift"; sourceTree = "<group>"; };
+		1633E18FEC5A504BC4086DED /* PebbleCommandManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PebbleCommandManager.swift"; sourceTree = "<group>"; };
+		ACE5C961ED848507623724D5 /* PebbleDataBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PebbleDataBridge.swift"; sourceTree = "<group>"; };
+		4045F59A6B31577FE4BDE677 /* PebbleLocalAPIServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PebbleLocalAPIServer.swift"; sourceTree = "<group>"; };
+		67640D49AB38E9B02FE3F304 /* PebbleManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PebbleManager.swift"; sourceTree = "<group>"; };
+		BC958FDD5BE51208450608E5 /* PebbleServiceFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PebbleServiceFormView.swift"; sourceTree = "<group>"; };
+		47C15642B76991FAB4C6D303 /* PebbleServiceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PebbleServiceManager.swift"; sourceTree = "<group>"; };
+		F9B9E2BE2F5B8EE383F5CA77 /* PebbleService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PebbleService.swift"; sourceTree = "<group>"; };
+		78B336463B10DB453719B218 /* PebbleService+UI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PebbleService+UI.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -2630,11 +2652,8 @@
 			isa = PBXGroup;
 			children = (
 				3811DE9325C9D88200A708ED /* AppearanceManager.swift */,,
-				04BD1E981117A2ACCA7CF196 /* PebbleManager */,
-				3A5FBFA9EFD49E11E2B8C339 /* PebbleService */,);
-			path = Appearance;
-			sourceTree = "<group>";
-		};
+3A5FBFA9EFD49E11E2B8C339 /* PebbleService */,,
+		
 		3811DE9425C9D88200A708ED /* Network */ = {
 			isa = PBXGroup;
 			children = (
@@ -2644,8 +2663,9 @@
 				DDC9B9962CFD2332003E7721 /* Nightscout */,
 				38FE826925CC82DB001FF17A /* NetworkService.swift */,
 				CE1F6DDA2BAE08B60064EB8D /* TidepoolManager.swift */,
-				CD1235C000000000000000F3 /* TidepoolUploadSerializer.swift */,
-			);
+				CD1235C000000000000000F3 /* TidepoolUploadSerializer.swift */,,,
+				BFF79D41D3E03BF698396789 /* PebbleManager */,
+				70D5B104D7BFCF23152CB5E2 /* PebbleService */,);
 			path = Network;
 			sourceTree = "<group>";
 		};
@@ -4829,29 +4849,34 @@
 		};
 
 
-		04BD1E981117A2ACCA7CF196 /* PebbleManager */ = {
+
+
+
+
+
+		BFF79D41D3E03BF698396789 /* PebbleManager */ = {
 			isa = PBXGroup;
 			children = (
-				84075E0063841560E4A2ECF0 /* PebbleManager.swift */,
-				A53F60AA0A75534C350B0348 /* PebbleAppMessageKeys.swift */,
-				02A3F929FDA541788CB6BF75 /* PebbleBLEBridge.swift */,
-				11B90D5F3937F6EA47F21AD8 /* PebbleCommandConfirmationView.swift */,
-				15281D78551E3A69EAF2875E /* PebbleCommandManager.swift */,
-				AE92E93A30FD36B1FF07859D /* PebbleDataBridge.swift */,
-				BA7E7658142804AFED366CE1 /* PebbleLocalAPIServer.swift */,
+				67640D49AB38E9B02FE3F304 /* PebbleManager.swift */,
+				ACA020DDCBA512080912924E /* PebbleAppMessageKeys.swift */,
+				5D582F8F82F7E75439DF18B5 /* PebbleBLEBridge.swift */,
+				AAAD79BB45F121DF7CE45606 /* PebbleCommandConfirmationView.swift */,
+				1633E18FEC5A504BC4086DED /* PebbleCommandManager.swift */,
+				ACE5C961ED848507623724D5 /* PebbleDataBridge.swift */,
+				4045F59A6B31577FE4BDE677 /* PebbleLocalAPIServer.swift */,
 			);
-			path = PebbleManager;
+			path = "PebbleManager";
 			sourceTree = "<group>";
 		};
-		3A5FBFA9EFD49E11E2B8C339 /* PebbleService */ = {
+		70D5B104D7BFCF23152CB5E2 /* PebbleService */ = {
 			isa = PBXGroup;
 			children = (
-				133F556755EEE38E81AF3AA3 /* PebbleService.swift */,
-				EAC332A27642C448D1595042 /* PebbleServiceManager.swift */,
-				3F5CF6BCD6CEAB9DF85CBB4C /* PebbleServiceFormView.swift */,
-				2CF81A4FAEA31AE164380A3A /* PebbleService+UI.swift */,
+				F9B9E2BE2F5B8EE383F5CA77 /* PebbleService.swift */,
+				47C15642B76991FAB4C6D303 /* PebbleServiceManager.swift */,
+				BC958FDD5BE51208450608E5 /* PebbleServiceFormView.swift */,
+				78B336463B10DB453719B218 /* PebbleService+UI.swift */,
 			);
-			path = PebbleService;
+			path = "PebbleService";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

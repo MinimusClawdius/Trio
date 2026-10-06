@@ -49,7 +49,7 @@ for path in pebble_swift:
 # Add FileReferences (insert before End PBXFileReference section)
 fr_section = []
 for path, (fid, fname) in file_refs.items():
-    fr_section.append(f'\t\t{fid} /* {fname} */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = {fname}; sourceTree = "<group>"; }};')
+    fr_section.append(f'\t\t{fid} /* {fname} */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "{fname}"; sourceTree = "<group>"; }};')
 
 end_fr = txt.find("/* End PBXFileReference section */")
 if end_fr != -1:
@@ -94,7 +94,7 @@ group_defs = f"""
 \t\t\t\t{file_refs["Trio/Sources/Services/PebbleManager/PebbleDataBridge.swift"][0]} /* PebbleDataBridge.swift */,
 \t\t\t\t{file_refs["Trio/Sources/Services/PebbleManager/PebbleLocalAPIServer.swift"][0]} /* PebbleLocalAPIServer.swift */,
 \t\t\t);
-\t\t\tpath = PebbleManager;
+\t\t\tpath = "PebbleManager";
 \t\t\tsourceTree = "<group>";
 \t\t}};
 \t\t{svc_gid} /* PebbleService */ = {{
@@ -105,7 +105,7 @@ group_defs = f"""
 \t\t\t\t{file_refs["Trio/Sources/Services/PebbleService/PebbleServiceFormView.swift"][0]} /* PebbleServiceFormView.swift */,
 \t\t\t\t{file_refs["Trio/Sources/Services/PebbleService/PebbleService+UI.swift"][0]} /* PebbleService+UI.swift */,
 \t\t\t);
-\t\t\tpath = PebbleService;
+\t\t\tpath = "PebbleService";
 \t\t\tsourceTree = "<group>";
 \t\t}};
 """
