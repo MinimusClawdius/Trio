@@ -172,3 +172,76 @@ end
 puts "Saving repaired project..."
 project.save
 puts "Project saved successfully. Repair complete."
+
+# ============================================================
+# 4. Pebble integration using proper xcodeproj API (repairs any text-edit damage from add script)
+# ============================================================
+puts "Ensuring Pebble groups and files are correctly attached via API..."
+
+services_group = project.main_group.recursive_children_groups.find do |g|
+  (g.path && g.path == "Services") || (g.name && g.name == "Services")
+end
+
+if services_group
+  puts "Found Services group"
+
+  pm_group = services_group.children.find { |c| (c.respond_to?(:path) && c.path == "PebbleManager") || (c.respond_to?(:name) && c.name == "PebbleManager") }
+  if pm_group.nil?
+    pm_group = project.new_group("PebbleManager", "PebbleManager")
+    services_group.children << pm_group
+    puts "Created PebbleManager subgroup"
+  end
+
+  ps_group = services_group.children.find { |c| (c.respond_to?(:path) && c.path == "PebbleService") || (c.respond_to?(:name) && c.name == "PebbleService") }
+  if ps_group.nil?
+    ps_group = project.new_group("PebbleService", "PebbleService")
+    services_group.children << ps_group
+    puts "Created PebbleService subgroup"
+  end
+
+  pebble_files = [
+    "Trio/Sources/Services/PebbleManager/PebbleManager.swift",
+    "Trio/Sources/Services/PebbleManager/PebbleDataBridge.swift",
+    "Trio/Sources/Services/PebbleManager/PebbleCommandManager.swift",
+    "Trio/Sources/Services/PebbleManager/PebbleCommandConfirmationView.swift",
+    "Trio/Sources/Services/PebbleManager/PebbleLocalAPIServer.swift",
+    "Trio/Sources/Services/PebbleManager/PebbleAppMessageKeys.swift",
+    "Trio/Sources/Services/PebbleManager/PebbleBLEBridge.swift",
+    "Trio/Sources/Services/PebbleService/PebbleService.swift",
+    "Trio/Sources/Services/PebbleService/PebbleServiceManager.swift",
+    "Trio/Sources/Services/PebbleService/PebbleServiceFormView.swift",
+    "Trio/Sources/Services/PebbleService/PebbleService+UI.swift"
+  ]
+
+  main_target = project.targets.find { |t| t.name.to_s == "Trio" }
+  source_phase = main_target&.source_build_phase
+
+  pebble_files.each do |rel|
+    next unless File.exist?(rel)
+    basename = File.basename(rel)
+    file_ref = project.files.find { |f| f.path && f.path.end_with?(basename) }
+    target_group = rel.include?("PebbleManager") ? pm_group : ps_group
+
+    if file_ref.nil?
+      file_ref = project.add_file(rel, target_group)
+      puts "Added fresh FileRef #{basename}"
+    else
+      unless target_group.children.include?(file_ref)
+        target_group.children << file_ref
+        puts "Moved #{basename} into correct Pebble group"
+      end
+    end
+
+    if source_phase && file_ref
+      unless source_phase.files.any? { |bf| bf.file_ref == file_ref rescue false }
+        source_phase.add_file_reference(file_ref, true)
+        puts "Wired #{basename} to Trio source phase"
+      end
+    end
+  end
+else
+  puts "WARNING: Services group not found for Pebble"
+end
+
+puts "Pebble API repair done."
+
