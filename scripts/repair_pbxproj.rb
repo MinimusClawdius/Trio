@@ -245,3 +245,43 @@ end
 
 puts "Pebble API repair done."
 
+
+# ============================================================
+# 5. Force clean re-serialization of Appearance and Network groups
+#    (the text corruption "Network = {" inside Appearance children was introduced by
+#     previous python text edits; re-creating the groups via API produces clean output)
+# ============================================================
+puts "Force-cleaning Appearance and Network groups via API..."
+
+appearance = project.main_group.recursive_children_groups.find do |g|
+  (g.path && g.path == "Appearance") || (g.name && g.name == "Appearance")
+end
+
+if appearance
+  puts "Found Appearance group"
+  # Find or create Network as a proper child group (not embedded)
+  network = appearance.children.find { |c| (c.respond_to?(:path) && c.path == "Network") || (c.respond_to?(:name) && c.name == "Network") }
+  if network.nil?
+    network = project.new_group("Network", "Network")
+    appearance.children << network
+    puts "Added Network as child of Appearance"
+  end
+
+  # Collect any file refs that should be in Network (from the current broken state they may be listed under Appearance)
+  # For now, just ensure the group exists and is referenced; the original files should already have refs.
+
+  # To force clean text, remove and re-add the Appearance group (this re-serializes its children list cleanly)
+  parent_of_appearance = appearance.parent || project.main_group
+  if parent_of_appearance.children.include?(appearance)
+    parent_of_appearance.children.delete(appearance)
+    new_appearance = project.new_group("Appearance", "Appearance")
+    # Copy children
+    appearance.children.to_a.each { |c| new_appearance.children << c }
+    parent_of_appearance.children << new_appearance
+    puts "Re-created Appearance group to force clean children list"
+  end
+else
+  puts "Appearance group not found (unexpected)"
+end
+
+puts "Appearance/Network clean re-serialization complete."
