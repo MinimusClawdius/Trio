@@ -1,0 +1,59 @@
+{
+  "name": "trio-pebble",
+  "version": "2.0.3",
+  "description": "Premium CGM watchface for Pebble - Trio, Dexcom Share, Nightscout",
+  "author": "MinimusClawdius",
+  "license": "MIT",
+  "pebble": {
+    "displayName": "Trio Pebble",
+    "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": ["aplite", "basalt", "chalk", "diorite", "emery"],
+    "watchapp": {
+      "watchface": true
+    },
+    "resources": {
+      "media": []
+    },
+    "messageKeys": {
+      "KEY_GLUCOSE": 0,
+      "KEY_TREND": 1,
+      "KEY_DELTA": 2,
+      "KEY_IOB": 3,
+      "KEY_COB": 4,
+      "KEY_LAST_LOOP": 5,
+      "KEY_GLUCOSE_STALE": 6,
+      "KEY_CMD_TYPE": 7,
+      "KEY_CMD_AMOUNT": 8,
+      "KEY_CMD_STATUS": 9,
+      "KEY_GRAPH_DATA": 10,
+      "KEY_GRAPH_COUNT": 11,
+      "KEY_LOOP_STATUS": 12,
+      "KEY_UNITS": 13,
+      "KEY_PUMP_STATUS": 14,
+      "KEY_RESERVOIR": 15,
+      "KEY_CONFIG_FACE_TYPE": 16,
+      "KEY_CONFIG_DATA_SOURCE": 17,
+      "KEY_CONFIG_HIGH_THRESHOLD": 18,
+      "KEY_CONFIG_LOW_THRESHOLD": 19,
+      "KEY_CONFIG_ALERT_HIGH_ENABLED": 20,
+      "KEY_CONFIG_ALERT_LOW_ENABLED": 21,
+      "KEY_CONFIG_ALERT_URGENT_LOW": 22,
+      "KEY_CONFIG_ALERT_SNOOZE_MIN": 23,
+      "KEY_CONFIG_COLOR_SCHEME": 24,
+      "KEY_BATTERY_PHONE": 25,
+      "KEY_WEATHER_TEMP": 26,
+      "KEY_WEATHER_ICON": 27,
+      "KEY_STEPS": 28,
+      "KEY_HEART_RATE": 29,
+      "KEY_PREDICTIONS_DATA": 30,
+      "KEY_PREDICTIONS_COUNT": 31,
+      "KEY_PUMP_BATTERY": 32,
+      "KEY_SENSOR_AGE": 33,
+      "KEY_CONFIG_CHANGED": 34,
+      "KEY_TAP_ACTION": 35
+    },
+    "capabilities": ["configurable"]
+  }
+}
