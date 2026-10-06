@@ -325,3 +325,46 @@ puts "Services re-serialization complete."
 puts "Final save after all repairs..."
 project.save
 puts "Final save complete."
+
+# ============================================================
+# 7. Aggressive re-serialization of all top-level groups to flush any
+#    remaining text corruption from prior edits (Services, Appearance, etc.)
+# ============================================================
+puts "Aggressive re-serialization of key groups..."
+
+def force_recreate_group(project, group)
+  return unless group
+  parent = group.parent || project.main_group
+  return unless parent.children.include?(group)
+  kids = group.children.to_a
+  name = group.name || group.path || "Group"
+  parent.children.delete(group)
+  new_g = project.new_group(name, group.path || name)
+  kids.each { |k| new_g.children << k rescue nil }
+  parent.children << new_g
+  puts "  Re-created #{name}"
+end
+
+# Re-create known problematic groups
+["Services", "Appearance", "Network", "LiveActivity"].each do |gname|
+  g = project.main_group.recursive_children_groups.find do |gg|
+    (gg.path && gg.path == gname) || (gg.name && gg.name == gname)
+  end
+  force_recreate_group(project, g) if g
+end
+
+# Also re-create the main target source phase files if possible (re-adding refs)
+main_t = project.targets.find { |t| t.name.to_s == "Trio" }
+if main_t
+  # Just touching the phase by re-adding known files can help, but skip for now
+end
+
+puts "Aggressive re-serialization done. Final save..."
+project.save
+puts "Saved after aggressive re-creation."
+
+# One more round-trip to be sure
+puts "Round-trip open/save to force clean plist emission..."
+project = Xcodeproj::Project.open(project_path)
+project.save
+puts "Round-trip save complete."
