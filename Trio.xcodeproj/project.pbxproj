@@ -2603,7 +2603,8 @@
 		3811DE9225C9D88200A708ED /* Appearance */ = {
 			isa = PBXGroup;
 			children = (
-				3811DE9325C9D88200A708ED /* AppearanceManager.swift */,3811DE9425C9D88200A708ED /* Network */ = {
+				3811DE9325C9D88200A708ED /* AppearanceManager.swift */,
+				3811DE9425C9D88200A708ED /* Network */ = {
 			isa = PBXGroup;
 			children = (
 				38E44521274E3DDC00EC9A94 /* NetworkReachabilityManager.swift */,
