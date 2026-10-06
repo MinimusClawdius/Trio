@@ -2596,7 +2596,8 @@
 				3811DEA525C9D88300A708ED /* UnlockManager */,
 				38E87406274F9AA500975559 /* UserNotifications */,
 				38E8754D275556E100975559 /* WatchManager */,
-			path = Services;
+				BEA75ECACB57E199A4E267C5 /* PebbleManager */,
+				51C9D754A2F57CEAD136CD86 /* PebbleService */);path = Services;
 			sourceTree = "<group>";
 		};
 		3811DE9225C9D88200A708ED /* Appearance */ = {
