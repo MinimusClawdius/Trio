@@ -3,62 +3,10 @@
 # Fixes orphaned FileReferences and BuildFiles that cause
 # "Consistency issue: no parent for object" during fastlane update_code_signing_settings.
 #
-# ============================================================
-# TOP-LEVEL RAW CLEANER (runs before any xcodeproj load)
-# Guarantees critical text fixes even if later high-level code crashes.
-# ============================================================
-puts "TOP-RAW-CLEANER: applying guaranteed raw fixes before loading project..."
-
-pbx_file = if ENV["GITHUB_WORKSPACE"]
-  File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj", "project.pbxproj")
-else
-  "Trio.xcodeproj/project.pbxproj"
-end
-
-if File.exist?(pbx_file)
-  raw = File.read(pbx_file)
-  orig = raw.dup
-
-  # 1. Services jam fixes (existing)
-  raw.gsub!(/(WatchManager \*\/,\s*\n)(\s*path = "Trio\/Sources\/Services";)/, "\\1\t\t\t);\n")
-  raw.gsub!(/(,\s*\n)(\s*path = "Trio\/Sources\/Services";\s*\n\s*sourceTree = "<group>";)/, "\\1\t\t\t);\n\t\t\tsourceTree = \"<group>\"\n")
-
-  # 2. LiveActivity group path
-  raw.gsub!(/path = "Trio\/Sources\/Services\/LiveActivity";/, 'path = "LiveActivity";')
-  raw.gsub!(/path = "[^"]*Services\/LiveActivity[^"]*";/, 'path = "LiveActivity";')
-
-  # 3. Stacked paths
-  raw.gsub!(/path = "Trio\/Sources\/Trio\/Sources[^"]*"/, 'path = "LiveActivity"')
-  raw.gsub!(/path = "(Trio\/Sources\/){2,}[^"]*"/, 'path = "LiveActivity"')
-
-  # 4. Typo
-  raw.gsub!(/LiveActitiyAttributes/, "LiveActivityAttributes")
-
-  # 5. Widget file refs clean
-  raw.gsub!(/path = "[^"]*\/(LiveActivity\.swift|LiveActivityBundle\.swift|LiveActivity\+Helper\.swift)";/, 'path = "\\1";')
-
-  # === ROBUST REMOVAL OF BAD ATTRIBUTES FROM EXTENSION (UUID specific, early) ===
-  bad_dd = "6BCF84DD2B16843A003AD46E"
-  bad_de = "6BCF84DE2B16843A003AD46E"
-  raw.gsub!(/^\t\t#{bad_dd} \/\* LiveActivityAttributes\.swift in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* LiveActivityAttributes\.swift \*\/; \};\s*$/, "")
-  raw.gsub!(/^\t\t#{bad_de} \/\* LiveActivityAttributes\.swift in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* LiveActivityAttributes\.swift \*\/; \};\s*$/, "")
-  raw.gsub!(/^\t\t\t\t#{bad_dd} \/\* LiveActivityAttributes\.swift in Sources \*\/,?\s*$/, "")
-  raw.gsub!(/^\t\t\t\t#{bad_de} \/\* LiveActivityAttributes\.swift in Sources \*\/,?\s*$/, "")
-  raw.gsub!(/#{bad_dd} \/\* LiveActivityAttributes\.swift in Sources \*\//, "")
-  raw.gsub!(/#{bad_de} \/\* LiveActivityAttributes\.swift in Sources \*\//, "")
-  puts "TOP-RAW: robust removal attempted for bad Attributes UUIDs (DD/DE)"
-
-  if raw != orig
-    File.write(pbx_file, raw)
-    puts "TOP-RAW-CLEANER: applied fixes (Services + LiveActivity + stacked + typo + Attributes removal)"
-  else
-    puts "TOP-RAW-CLEANER: no changes needed"
-  end
-else
-  puts "TOP-RAW-CLEANER: pbx not found"
-end
-
-puts "TOP-RAW-CLEANER complete. Proceeding to high-level repair..."
+# This version does a broad cleanup of ANY broken BuildFile across the project
+# before attempting to save, then re-wires the critical LiveActivity files.
+#
+# Run with: bundle exec ruby scripts/repair_pbxproj.rb
 
 require "xcodeproj"
 
@@ -376,7 +324,7 @@ puts "Removed #{removed} broken BuildFile(s)."
 
 live_group = project.main_group.recursive_children_groups.find do |g|
     path = (g.path || "").to_s
-    name = (g.respond_to?(:name) ? (g.name || "") : "").to_s
+    name = (g.name || "").to_s
     is_live = (path == "LiveActivity" || path.end_with?("/LiveActivity") || name == "LiveActivity")
     # Prefer the one that is NOT under Services/Trio/Sources/Services (for the extension)
     if is_live
@@ -395,7 +343,7 @@ end
 if !live_group
   live_group = project.main_group.recursive_children_groups.find do |g|
     path = (g.path || "").to_s
-    name = (g.respond_to?(:name) ? (g.name || "") : "").to_s
+    name = (g.name || "").to_s
     (path == "LiveActivity" || path.end_with?("/LiveActivity") || name == "LiveActivity")
   end
 end
@@ -519,19 +467,7 @@ if live_target
     source_phase.files.each do |bf|
       if bf.file_ref && bf.file_ref.path
         p = bf.file_ref.path.to_s
-        if bad_basenames.any? { |b| p.end
-  # Explicitly remove LiveActivityAttributes (the main app one) from the extension target
-  attrs_refs = project.files.select { |f| f.path && f.path.to_s.end_with?("LiveActivityAttributes.swift") }
-  attrs_refs.each do |ref|
-    if source_phase
-      before = source_phase.files.size
-      source_phase.files.reject! { |bf| bf.file_ref == ref }
-      if source_phase.files.size < before
-        puts "  High-level: removed LiveActivityAttributes.swift (#{ref.uuid}) from LiveActivityExtension sources"
-      end
-    end
-  end
-_with?(b) } || p.include?("Trio/Sources/Trio") || p.include?("/Trio/Trio/")
+        if bad_basenames.any? { |b| p.end_with?(b) } || p.include?("Trio/Sources/Trio") || p.include?("/Trio/Trio/")
           puts "  Removing bad ref from extension: #{p}"
           source_phase.remove_file_reference(bf.file_ref) rescue nil
         end
@@ -591,7 +527,7 @@ views_group_id = "DDCEBF412CC1B42500DF4C36"
 live_activity_group = nil
 
 project.main_group.recursive_children_groups.each do |g|
-  if g.children && g.children.any? { |c| c.uuid == views_group_id || (c.respond_to?(:name) ? (c.name || "") : "").to_s == "Views" }
+  if g.children && g.children.any? { |c| c.uuid == views_group_id || (c.name || "").to_s == "Views" }
     live_activity_group = g
     break
   end
@@ -644,8 +580,8 @@ puts "Aggressive LiveActivity extension group re-parent and path fix..."
 target_group = nil
 project.main_group.recursive_children_groups.each do |g|
   path = (g.path || "").to_s
-  name = (g.respond_to?(:name) ? (g.name || "") : "").to_s
-  has_views = g.children.any? { |c| (c.respond_to?(:name) ? (c.name || "") : "").to_s == "Views" || (c.uuid || "") == "DDCEBF412CC1B42500DF4C36" }
+  name = (g.name || "").to_s
+  has_views = g.children.any? { |c| (c.name || "").to_s == "Views" || (c.uuid || "") == "DDCEBF412CC1B42500DF4C36" }
   has_widget_files = g.children.any? { |c| 
     p = (c.path || c.name || "").to_s
     p.end_with?("LiveActivity.swift") || p.end_with?("LiveActivityBundle.swift") || p.end_with?("LiveActivity+Helper.swift")
@@ -666,7 +602,7 @@ if target_group
   # The main_group or a top-level "Trio" group
   root_parent = project.main_group
   # Try to find a "Trio" group at top level if it exists
-  trio_group = project.main_group.children.find { |c| (c.respond_to?(:name) ? (c.name || "") : "").to_s == "Trio" && c.is_a?(Xcodeproj::Project::Object::PBXGroup) }
+  trio_group = project.main_group.children.find { |c| (c.name || "").to_s == "Trio" && c.is_a?(Xcodeproj::Project::Object::PBXGroup) }
   root_parent = trio_group if trio_group
 
   # Check if already directly under root_parent
@@ -722,7 +658,7 @@ else
 
   services_group = project.main_group.recursive_children_groups.find do |g|
     path = (g.path || "").to_s
-    name = (g.respond_to?(:name) ? (g.name || "") : "").to_s
+    name = (g.name || "").to_s
     path == "Services" || path.end_with?("/Services") || path == "Trio/Sources/Services" || name == "Services"
   end
 
@@ -960,6 +896,8 @@ late_corrected = 0
 project.files.each do |fr|
   next unless fr.respond_to?(:path) && fr.path
   next if fr.path.start_with?("Trio/")
+  next if fr.path.include?("LiveActivity")
+  next if fr.path.include?("LiveActivity")  # do not touch LiveActivity paths here
 
   bare = fr.path
   candidate = "Trio/#{bare}"
@@ -977,6 +915,136 @@ if late_corrected > 0
 else
   puts "Late correction: no additional fixes needed."
 end
+
+
+# ============================================================
+# 2.9 Final ultra-late LiveActivity group path + re-parent + stack strip (raw + gem)
+#     This runs after ALL other sanitizers, Trio/ corrections, Pebble, re-serialization.
+#     It forces the critical extension group (owner of Views) to path="LiveActivity"
+#     and strips every known stacking pattern seen in previous failures.
+#     Raw text edit is the hammer to guarantee the pbxproj text the Fastlane sees is clean.
+# ============================================================
+puts "2.9 Final ultra-late LiveActivity path/re-parent/strip..."
+
+# Re-open project for gem attempt
+begin
+  project = Xcodeproj::Project.open(project_path)
+  target_group = nil
+  views_id = "DDCEBF412CC1B42500DF4C36"
+  widget_names = ["LiveActivity.swift", "LiveActivityBundle.swift", "LiveActivity+Helper.swift"]
+
+  project.main_group.recursive_children_groups.each do |g|
+    path = (g.path || "").to_s
+    name = (g.name || "").to_s
+    has_views = g.children.any? { |c| (c.name || "").to_s == "Views" || (c.uuid || "") == views_id }
+    has_widgets = g.children.any? do |c|
+      p = (c.path || c.name || "").to_s
+      widget_names.any? { |w| p.end_with?(w) }
+    end
+    if (name == "LiveActivity" || path.include?("LiveActivity")) && (has_views || has_widgets)
+      target_group = g
+      puts "  [2.9] Matched target LiveActivity group: path=#{path}, has_views=#{has_views}"
+      break
+    end
+  end
+
+  if target_group
+    target_group.path = "LiveActivity"
+    puts "  [2.9] Gem: forced path to LiveActivity"
+
+    # Re-parent to root
+    root = project.main_group
+    trio = project.main_group.children.find { |c| (c.name || "").to_s == "Trio" && c.is_a?(Xcodeproj::Project::Object::PBXGroup) }
+    root = trio if trio
+    project.main_group.recursive_children_groups.each do |p|
+      if p.children.include?(target_group) && p != root
+        p.children.delete(target_group) rescue nil
+        puts "  [2.9] Removed from nested parent"
+      end
+    end
+    root.children << target_group unless root.children.include?(target_group)
+    puts "  [2.9] Re-parent attempt done"
+
+    # Clean child file refs
+    target_group.children.each do |ch|
+      if ch.respond_to?(:path) && ch.path
+        if ch.path.to_s.include?("Trio/") || ch.path.to_s.include?("Sources/Services")
+          ch.path = File.basename(ch.path.to_s)
+          puts "  [2.9] Cleaned child file path to #{ch.path}"
+        end
+      end
+    end
+    project.save
+    puts "  [2.9] Saved after gem LiveActivity fix"
+  else
+    puts "  [2.9] No target group matched in gem pass"
+  end
+rescue => e
+  puts "  [2.9] Gem pass error (continuing with raw): #{e.message[0..150]}"
+end
+
+# === RAW TEXT HAMMER (guaranteed to affect the file Fastlane reads) ===
+pbx_path = if ENV["GITHUB_WORKSPACE"]
+  File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj", "project.pbxproj")
+else
+  "Trio.xcodeproj/project.pbxproj"
+end
+
+if File.exist?(pbx_path)
+  raw = File.read(pbx_path)
+  orig_size = raw.size
+
+  # Force exact known bad group to clean LiveActivity path + children (the extension one)
+  # This overrides any nesting
+  raw.gsub!(/6B1A8D1C2B14D91600E76752 \/\* LiveActivity \*\/ = \{[^}]*?
+		\};/m, <<~'GRP'.chomp + "
+		};")
+		6B1A8D1C2B14D91600E76752 /* LiveActivity */ = {
+			isa = PBXGroup;
+			children = (
+				DDCEBF412CC1B42500DF4C36 /* Views */,
+				6B1A8D1D2B14D91600E76752 /* LiveActivityBundle.swift */,
+				6B1A8D1F2B14D91600E76752 /* LiveActivity.swift */,
+				6B1A8D232B14D91700E76752 /* Assets.xcassets */,
+				6B1A8D252B14D91700E76752 /* Info.plist */,
+				DDCEBF5A2CC1B76400DF4C36 /* LiveActivity+Helper.swift */,
+			);
+			path = "LiveActivity";
+			sourceTree = "<group>";
+GRP
+
+  # Strip every stacked variant seen in failures for any LiveActivity group path
+  patterns = [
+    %r{path = "Trio/Sources/Trio/Sources/Services/Trio/Sources/Services/LiveActivity";},
+    %r{path = "Trio/Sources/Services/Trio/Sources/Services/LiveActivity";},
+    %r{path = "Trio/Sources/Trio/Sources/Services/LiveActivity";},
+    %r{path = "[^"]*Trio/[^"]*LiveActivity[^"]*";},
+    %r{path = "[^"]*Sources/Services/LiveActivity[^"]*";},
+  ]
+  patterns.each do |pat|
+    raw.gsub!(pat, 'path = "LiveActivity";')
+  end
+
+  # Any remaining LiveActivity group path that is not exactly "LiveActivity" -> clean
+  raw.gsub!(/path = "[^"]*LiveActivity[^"]*";/, 'path = "LiveActivity";')
+
+  # Clean the widget file refs to bare names (will resolve from the group)
+  raw.gsub!(/path = "[^"]*(LiveActivity\.swift|LiveActivityBundle\.swift|LiveActivity\+Helper\.swift)";/, 'path = "";')
+
+  # Fix the typo Attributes if it appears in bad context (prefer correct spelling for in-app, but clean path)
+  raw.gsub!(/path = "[^"]*LiveActitiyAttributes\.swift";/, 'path = "LiveActivityAttributes.swift";')
+
+  if raw.size != orig_size || raw != File.read(pbx_path)
+    File.write(pbx_path, raw)
+    puts "  [2.9] RAW: Stripped stacked LiveActivity paths, forced group 6B1A8D1C to LiveActivity, cleaned refs"
+  else
+    puts "  [2.9] RAW: No change needed or patterns not matched"
+  end
+else
+  puts "  [2.9] pbx_path not found for raw fix"
+end
+
+puts "2.9 LiveActivity final fix complete."
 
 puts "Round-trip open/save to force clean plist emission..."
 project = Xcodeproj::Project.open(project_path)
@@ -1183,6 +1251,7 @@ corrected = 0
 project.files.each do |fr|
   next unless fr.respond_to?(:path) && fr.path
   next if fr.path.start_with?("Trio/")
+  next if fr.path.include?("LiveActivity")
 
   bare_path = fr.path
   trio_path = "Trio/#{bare_path}"
@@ -1204,6 +1273,7 @@ end
 project.files.each do |fr|
   next unless fr.respond_to?(:path) && fr.path
   next if fr.path.start_with?("Trio/")
+  next if fr.path.include?("LiveActivity")
 
   if fr.path =~ %r{^(Sources|Services|LiveActivity)/}
     candidate = "Trio/#{fr.path}"
@@ -1222,11 +1292,12 @@ end
 puts "Repair script completed successfully with validation."
 
 # ============================================================
-# LATE-RAW-HAMMER (final raw text safety net)
-# Appended after main repair. Does direct string edits on the
-# .pbxproj file that will be seen by Fastlane/xcodeproj.
+# LATE RAW HAMMER (appended clean version)
+# Runs after the main "Repair script completed" message.
+# Performs final raw text edits on the pbxproj to guarantee
+# the file written to disk for Fastlane is clean.
 # ============================================================
-puts "LATE-RAW-HAMMER: final raw cleanup pass..."
+puts "LATE-RAW-HAMMER: final raw text cleanup for Services jam and LiveActivity..."
 
 pbx_path = if ENV["GITHUB_WORKSPACE"]
   File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj", "project.pbxproj")
@@ -1238,115 +1309,45 @@ if File.exist?(pbx_path)
   raw = File.read(pbx_path)
   orig = raw.dup
 
-  # === Services jam fix (guaranteed last chance) ===
-  # Insert ");" to close the Services children array.
+  # Services jam: insert ); to close the children array before the stray path line
+  # Observed pattern:
+  #   ... /* WatchManager */,
+  #   path = "Trio/Sources/Services";
+  #   sourceTree = "<group>";
+
   raw.gsub!(/(WatchManager \*\/,\s*\n)(\s*path = "Trio\/Sources\/Services";)/, "\\1\t\t\t);\n\\2")
   raw.gsub!(/(,\s*\n)(\s*path = "Trio\/Sources\/Services";)/, "\\1\t\t\t);\n\\2")
   raw.gsub!(/(,\s*\n)(\s*path = "Trio\/Sources\/Services";\s*\n\s*sourceTree = "<group>";)/, "\\1\t\t\t);\n\\2")
 
-  # === LiveActivity cleanup ===
+  # LiveActivity group path cleanup (any stacked or Services-nested)
   raw.gsub!(/path = "[^"]*LiveActivity[^"]*";/, 'path = "LiveActivity";')
   raw.gsub!(/path = "Trio\/Sources\/Services\/LiveActivity";/, 'path = "LiveActivity";')
 
-  # Widget files to bare names
+  # Clean widget file refs
   raw.gsub!(/path = "[^"]*\/(LiveActivity\.swift|LiveActivityBundle\.swift|LiveActivity\+Helper\.swift)";/, 'path = "\\1";')
   raw.gsub!(/path = "[^"]*(LiveActivity\.swift|LiveActivityBundle\.swift|LiveActivity\+Helper\.swift)";/, 'path = "\\1";')
 
-  # Typo
+  # Typo fix
   raw.gsub!(/LiveActitiyAttributes/, 'LiveActivityAttributes')
 
   if raw != orig
     File.write(pbx_path, raw)
-    puts "LATE-RAW-HAMMER: applied fixes (Services jam + LiveActivity)"
+    puts "LATE-RAW-HAMMER: applied final raw fixes (Services jam closed + LiveActivity cleaned)"
   else
-    puts "LATE-RAW-HAMMER: no changes (already clean or patterns not matched)"
+    puts "LATE-RAW-HAMMER: no changes needed (patterns not present or already clean)"
   end
 else
-  puts "LATE-RAW-HAMMER: pbx not found"
+  puts "LATE-RAW-HAMMER: pbx_path not found"
 end
 
-puts "LATE-RAW-HAMMER complete."
+puts "LATE-RAW-HAMMER complete. Script exiting."
 
 # ============================================================
-# FINAL-HAMMER (always attempt at very end)
-# Extra safety net for any remaining corruption after high-level
+# FINAL ATTRIBUTES NUKE (UUID-specific, after all other logic)
+# Ensures the bad main-app LiveActivityAttributes.swift BuildFiles
+# are removed from the LiveActivityExtension sources phase.
 # ============================================================
-puts "FINAL-HAMMER: last-chance raw cleanup..."
-
-pbx_path = if ENV["GITHUB_WORKSPACE"]
-  File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj", "project.pbxproj")
-else
-  "Trio.xcodeproj/project.pbxproj"
-end
-
-if File.exist?(pbx_path)
-  raw = File.read(pbx_path)
-  o = raw.dup
-
-  # Force LiveActivity group path no matter what
-  raw.gsub!(/6B1A8D1C2B14D91600E76752 \/\* LiveActivity \*\/ = \{[^}]*?path = [^;]+;/m, '6B1A8D1C2B14D91600E76752 /* LiveActivity */ = {
-			isa = PBXGroup;
-			children = (
-				DDCEBF412CC1B42500DF4C36 /* Views */,
-				6B1A8D1D2B14D91600E76752 /* LiveActivityBundle.swift */,
-				6B1A8D1F2B14D91600E76752 /* LiveActivity.swift */,
-				6B1A8D232B14D91700E76752 /* Assets.xcassets */,
-				6B1A8D252B14D91700E76752 /* Info.plist */,
-				DDCEBF5A2CC1B76400DF4C36 /* LiveActivity+Helper.swift */,
-			);
-			path = "LiveActivity";
-			sourceTree = "<group>";
-		};')
-
-  raw.gsub!(/path = "Trio\/Sources\/Services\/LiveActivity";/, 'path = "LiveActivity";')
-  raw.gsub!(/path = "[^"]*LiveActivity[^"]*\/LiveActivity[^"]*";/, 'path = "LiveActivity";')
-
-  # Clean any remaining stacked in file refs
-  raw.gsub!(/path = "Trio\/Sources\/Trio[^"]*"/, 'path = "LiveActivity"')
-  raw.gsub!(/path = "(Trio\/Sources\/){2,}[^"]*"/, 'path = "LiveActivity"')
-
-  # Fix typo everywhere
-  raw.gsub!(/LiveActitiyAttributes/, 'LiveActivityAttributes')
-
-  # Remove duplicate LiveActitiyAttributes entries if present in build phase (simple)
-  # (more sophisticated would be needed for exact PBXBuildFile dedup)
-
-  
-
-puts "LAST-CHANCE-RAW-NUKE: ensuring LiveActivityAttributes BuildFiles are gone from extension..."
-pbx = if ENV["GITHUB_WORKSPACE"]
-  File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj", "project.pbxproj")
-else
-  "Trio.xcodeproj/project.pbxproj"
-end
-if File.exist?(pbx)
-  raw = File.read(pbx)
-  o = raw.dup
-
-  # Exact bad BuildFile defs
-  raw.gsub!(/^\t\t6BCF84DD2B16843A003AD46E \/\* LiveActivityAttributes\.swift in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* LiveActivityAttributes\.swift \*\/; \};\s*$/, '')
-  raw.gsub!(/^\t\t6BCF84DE2B16843A003AD46E \/\* LiveActivityAttributes\.swift in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* LiveActivityAttributes\.swift \*\/; \};\s*$/, '')
-
-  # In files lists (with or without comma)
-  raw.gsub!(/^\t\t\t\t6BCF84DD2B16843A003AD46E \/\* LiveActivityAttributes\.swift in Sources \*\/,?\s*$/, '')
-  raw.gsub!(/^\t\t\t\t6BCF84DE2B16843A003AD46E \/\* LiveActivityAttributes\.swift in Sources \*\/,?\s*$/, '')
-
-  # Any remaining UUID references in Sources context
-  raw.gsub!(/6BCF84DD2B16843A003AD46E \/\* LiveActivityAttributes\.swift in Sources \*\//, '')
-  raw.gsub!(/6BCF84DE2B16843A003AD46E \/\* LiveActivityAttributes\.swift in Sources \*\//, '')
-
-  if raw != o
-    File.write(pbx, raw)
-    puts "LAST-CHANCE-RAW-NUKE: removed bad Attributes entries"
-  else
-    puts "LAST-CHANCE-RAW-NUKE: no change (already clean or pattern missed)"
-  end
-end
-
-# ============================================================
-# FINAL LAST-CHANCE RAW NUKE + PHASE REWRITE (after all high-level)
-# ============================================================
-puts "FINAL-LAST-CHANCE: cleaning LiveActivityAttributes from extension and rewriting extension sources phase..."
+puts "FINAL-ATTRIBUTES-NUKE: removing LiveActivityAttributes from extension..."
 pbx = if ENV["GITHUB_WORKSPACE"]
   File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj", "project.pbxproj")
 else
@@ -1359,39 +1360,22 @@ if File.exist?(pbx)
   bad_dd = "6BCF84DD2B16843A003AD46E"
   bad_de = "6BCF84DE2B16843A003AD46E"
 
-  # Remove bad BuildFile defs
+  # Remove the exact bad BuildFile definitions
   raw.gsub!(/^\t\t#{bad_dd} \/\* LiveActivityAttributes\.swift in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* LiveActivityAttributes\.swift \*\/; \};\s*$/, '')
   raw.gsub!(/^\t\t#{bad_de} \/\* LiveActivityAttributes\.swift in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* LiveActivityAttributes\.swift \*\/; \};\s*$/, '')
 
-  # Remove from any files lists
+  # Remove from files lists (with or without comma)
   raw.gsub!(/^\t\t\t\t#{bad_dd} \/\* LiveActivityAttributes\.swift in Sources \*\/,?\s*$/, '')
   raw.gsub!(/^\t\t\t\t#{bad_de} \/\* LiveActivityAttributes\.swift in Sources \*\/,?\s*$/, '')
 
-  # Loose nuke
+  # Loose removal of any remaining references
   raw.gsub!(/#{bad_dd} \/\* LiveActivityAttributes\.swift in Sources \*\//, '')
   raw.gsub!(/#{bad_de} \/\* LiveActivityAttributes\.swift in Sources \*\//, '')
 
-  # Positive rewrite of the LiveActivityExtension sources phase (6B1A8D132B14D91500E76752)
-  # Replace its files = ( ... ); with only the known good extension files
-  good_files = <<-FILES
-\t\t\t\t71E6F2BF8CAFA6997C70FB82 /* LiveActivity.swift in Sources */,
-\t\t\t\t149FB165FC9D197E49685851 /* LiveActivityBundle.swift in Sources */,
-\t\t\t\t420A4D3DFA588DEC24B8F247 /* LiveActivity+Helper.swift in Sources */,
-FILES
-  # Find the phase and replace its files list (simple targeted replace for this known phase)
-  phase_start = raw.index("6B1A8D132B14D91500E76752 /* Sources */ = {")
-  if phase_start
-    # Find the files = ( ... ); block after it
-    files_match = /files = \(\s*(.*?)\s*\);/m
-    # For safety, do a broad replace around the known bad lines in that phase
-    # Simpler: remove any remaining bad lines globally one more time after other edits
-  end
-
   if raw != o
     File.write(pbx, raw)
-    puts "FINAL-LAST-CHANCE: removed bad Attributes and attempted phase cleanup"
+    puts "FINAL-ATTRIBUTES-NUKE: removed bad Attributes BuildFiles"
   else
-    puts "FINAL-LAST-CHANCE: no change or already clean"
+    puts "FINAL-ATTRIBUTES-NUKE: no matching bad entries (already clean or not present)"
   end
 end
-
