@@ -412,32 +412,51 @@ if live_target
   ]
 
   problematic_files.each do |rel_path|
-    next unless File.exist?(rel_path)
-
     basename = File.basename(rel_path)
+    # Try multiple possible on-disk locations
+    candidates = [rel_path, "LiveActivity/#{basename}", "Trio/Sources/Services/LiveActivity/#{basename}", basename]
+    found_on_disk = candidates.find { |p| File.exist?(p) }
+
     file_ref = project.files.find { |f| f.path == basename || (f.path && f.path.end_with?(basename)) }
 
+    if file_ref.nil? && found_on_disk
+      puts "Creating fresh FileRef for #{basename} (from #{found_on_disk})"
+      file_ref = project.new_file(found_on_disk)
+    end
+
     if file_ref
+      # Ensure in the group
       unless live_group.children.include?(file_ref)
-        puts "Re-attaching #{basename} FileRef to LiveActivity group"
-        live_group.children << file_ref
+        live_group.children << file_ref rescue nil
+        puts "  Attached #{basename} to LiveActivity group"
       end
 
       if source_phase
-        # Make sure it's not still there as a stale one
-        source_phase.files.each do |bf|
-          if bf.file_ref == file_ref
-            source_phase.remove_file_reference(file_ref) rescue nil
-          end
+        # Remove any existing BuildFiles for this ref to avoid dups
+        source_phase.files.select { |bf| bf.file_ref == file_ref }.each do |bf|
+          source_phase.remove_file_reference(file_ref) rescue nil
         end
 
         puts "Re-adding #{basename} to LiveActivityExtension via proper API"
         source_phase.add_file_reference(file_ref, true)
       end
     else
-      puts "Adding fresh FileRef for #{basename}"
-      new_ref = project.new_file(rel_path)  # project-level to avoid group path stacking
-      source_phase.add_file_reference(new_ref, true) if source_phase
+      puts "WARNING: Could not locate or create FileRef for #{basename}"
+    end
+  end
+
+  # Deduplicate any remaining duplicate BuildFiles in the extension sources phase
+  if source_phase
+    seen = {}
+    source_phase.files.each do |bf|
+      next unless bf.file_ref
+      key = bf.file_ref.uuid
+      if seen[key]
+        puts "  Dedup: removing duplicate BuildFile for #{bf.file_ref.path}"
+        source_phase.remove_file_reference(bf.file_ref) rescue nil
+      else
+        seen[key] = true
+      end
     end
   end
 else
@@ -497,6 +516,19 @@ end
 
 if live_target
   puts "Re-cleaning sources for #{live_target.name}"
+  # Remove any directory "LiveActivity" reference from the sources phase (individual files only)
+  if source_phase
+    source_phase.files.each do |bf|
+      if bf.file_ref && bf.file_ref.path
+        p = bf.file_ref.path.to_s
+        if p == "LiveActivity" || p.end_with?("/LiveActivity")
+          puts "  Removing directory reference 'LiveActivity' from extension sources (causes dups)"
+          source_phase.remove_file_reference(bf.file_ref) rescue nil
+        end
+      end
+    end
+  end
+
   source_phase = live_target.source_build_phase
 
   # Remove any BuildFile that references the typo or obviously bad LiveActivity files
