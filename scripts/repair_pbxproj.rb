@@ -378,12 +378,51 @@ if live_target
       end
     else
       puts "Adding fresh FileRef for #{basename}"
-      new_ref = live_group.new_file(rel_path)
+      new_ref = project.new_file(rel_path)  # project-level to avoid group path stacking
       source_phase.add_file_reference(new_ref, true) if source_phase
     end
   end
 else
   puts "WARNING: Could not find LiveActivity target."
+# ============================================================
+# 2.5 Robust path sanitizer - fix any stacked/duplicated paths
+#     introduced by prior merges or over-eager rewrites.
+#     This runs after LiveActivity re-wire but before Pebble and final save.
+# ============================================================
+puts "Running path sanitizer for stacked/duplicated references..."
+sanitized = 0
+project.files.each do |f|
+  next unless f.path
+  orig = f.path.to_s
+  newp = orig.dup
+
+  # Fix common stacking patterns seen in LiveActivity and Services
+  newp = newp.gsub(%r{(Trio/Sources/)+}, 'Trio/Sources/')
+  newp = newp.gsub(%r{LiveActivity/LiveActivity/}, 'LiveActivity/')
+  newp = newp.gsub(%r{Services/Services/}, 'Services/')
+  newp = newp.gsub(%r{(Trio/){2,}}, 'Trio/')
+
+  if newp != orig
+    f.path = newp
+    sanitized += 1
+    puts "  Sanitized path: #{orig} -> #{newp}"
+  end
+end
+puts "Path sanitizer fixed #{sanitized} FileReference(s)."
+
+# Also clean any group paths that are stacked
+project.main_group.recursive_children_groups.each do |g|
+  next unless g.path
+  orig = g.path.to_s
+  newp = orig.dup
+  newp = newp.gsub(%r{(Trio/Sources/)+}, 'Trio/Sources/')
+  newp = newp.gsub(%r{(Trio/){2,}}, 'Trio/')
+  if newp != orig
+    g.path = newp
+    sanitized += 1
+    puts "  Sanitized group path: #{orig} -> #{newp}"
+  end
+end
 end
 
 # ============================================================
