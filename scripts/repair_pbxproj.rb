@@ -519,7 +519,19 @@ if live_target
     source_phase.files.each do |bf|
       if bf.file_ref && bf.file_ref.path
         p = bf.file_ref.path.to_s
-        if bad_basenames.any? { |b| p.end_with?(b) } || p.include?("Trio/Sources/Trio") || p.include?("/Trio/Trio/")
+        if bad_basenames.any? { |b| p.end
+  # Explicitly remove LiveActivityAttributes (the main app one) from the extension target
+  attrs_refs = project.files.select { |f| f.path && f.path.to_s.end_with?("LiveActivityAttributes.swift") }
+  attrs_refs.each do |ref|
+    if source_phase
+      before = source_phase.files.size
+      source_phase.files.reject! { |bf| bf.file_ref == ref }
+      if source_phase.files.size < before
+        puts "  High-level: removed LiveActivityAttributes.swift (#{ref.uuid}) from LiveActivityExtension sources"
+      end
+    end
+  end
+_with?(b) } || p.include?("Trio/Sources/Trio") || p.include?("/Trio/Trio/")
           puts "  Removing bad ref from extension: #{p}"
           source_phase.remove_file_reference(bf.file_ref) rescue nil
         end
