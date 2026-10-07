@@ -31,32 +31,48 @@ if File.exist?(pbx_file)
   fixed = false
 
   # Known jam: inside the Services group children list, a stray
-  # "path = Services;" / sourceTree block appears before the proper closing
-  # of the children array. This produces "Array missing ',' in between objects".
+  # "path = .../Services;" line appears where a child entry should be,
+  # before the proper closing of the children array.
+  # This produces "Array missing ',' in between objects".
   #
-  # Pattern seen:
+  # Current observed form (after path normalization):
   #     38E8754D... /* WatchManager */,
-  # 			path = Services;
+  # 			path = "Trio/Sources/Services";
   # 			sourceTree = "<group>";
   # 		};
   #
-  # We insert the missing ");" to close the children array.
-  if raw =~ /WatchManager \*/m && raw =~ /path = Services;/m
-    # Try to fix the specific jammed fragment
-    # Replace the bad sequence with a properly closed children list
+  # We insert the missing ");" (with matching indent) to close the children array.
+  # Handle both old bare "path = Services;" and new full quoted path.
+
+  # Specific for current full quoted path after WatchManager (or similar last child)
+  services_path_pattern = /path = "Trio\/Sources\/Services";/
+  if raw =~ /WatchManager \*/m && raw =~ services_path_pattern
+    # Match last child line ending with comma, followed by the path line
     new_raw = raw.gsub(
-      /(,\s*\n\s*38E8754D[0-9A-Fa-f]+ \/\* WatchManager \*\/,\s*\n)(\s*path = Services;\s*\n\s*sourceTree = "<group>";\s*\n\s*\};)/m,
+      /(,\s*\n)(\s*path = "Trio\/Sources\/Services";\s*\n\s*sourceTree = "<group>";)/m,
       "\\1\t\t\t);\n\\2"
     )
     if new_raw != raw
       raw = new_raw
       fixed = true
-      puts "Applied raw text fix for Services children jam (WatchManager -> path=Services)"
+      puts "Applied raw text fix for Services children jam (full path after WatchManager)"
     end
   end
 
-  # More general fallback: any occurrence of bare "path = Services;" right after
-  # a child entry inside what should be a children array, insert ");" before it.
+  # General fallback for current full path form right after any child comma
+  if raw =~ /,\s*\n\s*path = "Trio\/Sources\/Services";\s*\n\s*sourceTree = "<group>";/m
+    new_raw = raw.gsub(
+      /(,\s*\n)(\s*path = "Trio\/Sources\/Services";\s*\n\s*sourceTree = "<group>";)/m,
+      "\\1\t\t\t);\n\\2"
+    )
+    if new_raw != raw
+      raw = new_raw
+      fixed = true
+      puts "Applied general raw text fix for Trio/Sources/Services jam"
+    end
+  end
+
+  # Backward compat for old bare unquoted form
   if raw =~ /,\s*\n\s*path = Services;\s*\n\s*sourceTree = "<group>";/m
     new_raw = raw.gsub(
       /(,\s*\n)(\s*path = Services;\s*\n\s*sourceTree = "<group>";)/m,
@@ -65,7 +81,20 @@ if File.exist?(pbx_file)
     if new_raw != raw
       raw = new_raw
       fixed = true
-      puts "Applied general raw text fix for Services path=Services jam"
+      puts "Applied general raw text fix for bare path=Services jam"
+    end
+  end
+
+  # Also handle the case where the path line has no leading whitespace in the jam
+  if raw =~ /,\s*\npath = "Trio\/Sources\/Services";/m
+    new_raw = raw.gsub(
+      /(,\s*\n)(path = "Trio\/Sources\/Services";)/m,
+      "\\1\t\t\t);\n\t\t\t\\2"
+    )
+    if new_raw != raw
+      raw = new_raw
+      fixed = true
+      puts "Applied fix for unindented path=Services jam"
     end
   end
 
