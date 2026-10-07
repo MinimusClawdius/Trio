@@ -368,7 +368,7 @@ puts "Removed #{removed} broken BuildFile(s)."
 
 live_group = project.main_group.recursive_children_groups.find do |g|
     path = (g.path || "").to_s
-    name = (g.name || "").to_s
+    name = (g.respond_to?(:name) ? (g.name || "") : "").to_s
     is_live = (path == "LiveActivity" || path.end_with?("/LiveActivity") || name == "LiveActivity")
     # Prefer the one that is NOT under Services/Trio/Sources/Services (for the extension)
     if is_live
@@ -387,7 +387,7 @@ end
 if !live_group
   live_group = project.main_group.recursive_children_groups.find do |g|
     path = (g.path || "").to_s
-    name = (g.name || "").to_s
+    name = (g.respond_to?(:name) ? (g.name || "") : "").to_s
     (path == "LiveActivity" || path.end_with?("/LiveActivity") || name == "LiveActivity")
   end
 end
@@ -571,7 +571,7 @@ views_group_id = "DDCEBF412CC1B42500DF4C36"
 live_activity_group = nil
 
 project.main_group.recursive_children_groups.each do |g|
-  if g.children && g.children.any? { |c| c.uuid == views_group_id || (c.name || "").to_s == "Views" }
+  if g.children && g.children.any? { |c| c.uuid == views_group_id || (c.respond_to?(:name) ? (c.name || "") : "").to_s == "Views" }
     live_activity_group = g
     break
   end
@@ -624,8 +624,8 @@ puts "Aggressive LiveActivity extension group re-parent and path fix..."
 target_group = nil
 project.main_group.recursive_children_groups.each do |g|
   path = (g.path || "").to_s
-  name = (g.name || "").to_s
-  has_views = g.children.any? { |c| (c.name || "").to_s == "Views" || (c.uuid || "") == "DDCEBF412CC1B42500DF4C36" }
+  name = (g.respond_to?(:name) ? (g.name || "") : "").to_s
+  has_views = g.children.any? { |c| (c.respond_to?(:name) ? (c.name || "") : "").to_s == "Views" || (c.uuid || "") == "DDCEBF412CC1B42500DF4C36" }
   has_widget_files = g.children.any? { |c| 
     p = (c.path || c.name || "").to_s
     p.end_with?("LiveActivity.swift") || p.end_with?("LiveActivityBundle.swift") || p.end_with?("LiveActivity+Helper.swift")
@@ -646,7 +646,7 @@ if target_group
   # The main_group or a top-level "Trio" group
   root_parent = project.main_group
   # Try to find a "Trio" group at top level if it exists
-  trio_group = project.main_group.children.find { |c| (c.name || "").to_s == "Trio" && c.is_a?(Xcodeproj::Project::Object::PBXGroup) }
+  trio_group = project.main_group.children.find { |c| (c.respond_to?(:name) ? (c.name || "") : "").to_s == "Trio" && c.is_a?(Xcodeproj::Project::Object::PBXGroup) }
   root_parent = trio_group if trio_group
 
   # Check if already directly under root_parent
@@ -702,7 +702,7 @@ else
 
   services_group = project.main_group.recursive_children_groups.find do |g|
     path = (g.path || "").to_s
-    name = (g.name || "").to_s
+    name = (g.respond_to?(:name) ? (g.name || "") : "").to_s
     path == "Services" || path.end_with?("/Services") || path == "Trio/Sources/Services" || name == "Services"
   end
 
@@ -1300,3 +1300,25 @@ if File.exist?(pbx_path)
 end
 
 puts "FINAL-HAMMER complete."
+
+# ============================================================
+# EXTRA RAW CLEAN for extension sources (remove Attributes from LiveActivityExtension build phase)
+# ============================================================
+puts "EXTRA-RAW: stripping LiveActivityAttributes from LiveActivityExtension sources phase if present..."
+pbx = if ENV["GITHUB_WORKSPACE"]
+  File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj", "project.pbxproj")
+else
+  "Trio.xcodeproj/project.pbxproj"
+end
+if File.exist?(pbx)
+  raw = File.read(pbx)
+  o = raw.dup
+  # Remove BuildFile lines for Attributes that are in the extension's sources context
+  # The extension sources phase UUID from logs is often 6B1A8D132B14D91500E76752 or similar
+  raw.gsub!(/\t\t\t\t[0-9A-F]+ \/\* LiveActivityAttributes\.swift in Sources \*\/ = \{isa = PBXBuildFile; fileRef = [0-9A-F]+ \/\* LiveActivityAttributes\.swift \*\/; \};/, '')
+  # Also remove any remaining references in that phase if the pattern matches
+  if raw != o
+    File.write(pbx, raw)
+    puts "EXTRA-RAW: removed Attributes BuildFile entries from extension phase"
+  end
+end
