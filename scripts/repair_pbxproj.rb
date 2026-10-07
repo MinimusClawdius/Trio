@@ -516,6 +516,23 @@ end
 
 if live_target
   puts "Re-cleaning sources for #{live_target.name}"
+  # === CRITICAL: Remove any directory "LiveActivity" reference from extension sources ===
+  # This directory ref + explicit files causes "Multiple commands produce .stringsdata"
+  if source_phase
+    removed_any = false
+    source_phase.files.each do |bf|
+      if bf.file_ref
+        pname = (bf.file_ref.path || bf.file_ref.name || "").to_s
+        if pname == "LiveActivity" || pname.end_with?("/LiveActivity") || pname == "LiveActivity/"
+          puts "  REMOVING directory ref 'LiveActivity' from LiveActivityExtension sources (root cause of duplicate stringsdata)"
+          source_phase.remove_file_reference(bf.file_ref) rescue nil
+          removed_any = true
+        end
+      end
+    end
+    puts "  No directory LiveActivity ref found in extension sources" unless removed_any
+  end
+
   # Remove any directory "LiveActivity" reference from the sources phase (individual files only)
   if source_phase
     source_phase.files.each do |bf|
@@ -578,6 +595,29 @@ if live_target
       end
     end
   end
+
+
+  # Force the exact three widget files with bare paths (top-level LiveActivity/)
+  %w[LiveActivity.swift LiveActivityBundle.swift LiveActivity+Helper.swift].each do |fname|
+    ref = project.files.find { |f| f.path && f.path.to_s.end_with?(fname) }
+    if ref.nil?
+      # try to create from top-level
+      if File.exist?("LiveActivity/#{fname}")
+        puts "  Creating missing ref for #{fname}"
+        ref = project.new_file("LiveActivity/#{fname}")
+      end
+    end
+    if ref && source_phase
+      # remove any existing to avoid dups then add
+      source_phase.files.select { |bf| bf.file_ref == ref }.each { |bf| source_phase.remove_file_reference(ref) rescue nil }
+      has_it = source_phase.files.any? { |bf| bf.file_ref == ref }
+      unless has_it
+        puts "  Force-adding #{fname} to extension sources"
+        source_phase.add_file_reference(ref, true)
+      end
+    end
+  end
+
 else
   puts "WARNING: live_target not found in strong cleanup"
 end
