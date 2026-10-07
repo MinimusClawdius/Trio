@@ -598,6 +598,46 @@ if live_target
       end
     end
   end
+
+  # === Ensure LiveActivityAttributes (and +Helper) are present for the widget extension ===
+  # Widget Views (in LiveActivity/Views/WidgetItems) use LiveActivityAttributes type.
+  # Add the correct (non-typo) files to the extension sources.
+  %w[LiveActivityAttributes.swift LiveActivityAttributes+Helper.swift].each do |fname|
+    ref = project.files.find { |f| f.path && f.path.to_s.end_with?(fname) }
+    if ref.nil?
+      candidates = [
+        "Trio/Sources/Services/LiveActivity/#{fname}",
+        "Sources/Services/LiveActivity/#{fname}"
+      ]
+      found = candidates.find { |p| File.exist?(p) }
+      if found
+        puts "  Creating FileRef for #{fname} from #{found}"
+        ref = project.new_file(found)
+      else
+        puts "  WARNING: source not found for #{fname}"
+      end
+    end
+    if ref && source_phase
+      source_phase.files.select { |bf| bf.file_ref == ref }.each { |bf| source_phase.remove_file_reference(ref) rescue nil }
+      has_it = source_phase.files.any? { |bf| bf.file_ref == ref }
+      unless has_it
+        puts "  Adding #{fname} to LiveActivityExtension sources (provides Attributes type to Views)"
+        source_phase.add_file_reference(ref, true)
+      end
+    end
+  end
+
+  # Nuke any typo LiveActitiyAttributes refs
+  if source_phase
+    source_phase.files.each do |bf|
+      next unless bf.file_ref && bf.file_ref.path
+      if bf.file_ref.path.to_s.include?("LiveActitiyAttributes")
+        puts "  Removing typo LiveActitiyAttributes: #{bf.file_ref.path}"
+        source_phase.remove_file_reference(bf.file_ref) rescue nil
+      end
+    end
+  end
+
 else
   puts "WARNING: live_target not found in strong cleanup"
 end
@@ -1474,6 +1514,9 @@ if File.exist?(pbx_path)
   if raw != orig
     File.write(pbx_path, raw)
     puts "  LATE-RAW-HAMMER: removed directory LiveActivity sources refs (DDCEBF5B etc.)"
+  # Clean Attributes paths and remove typo version
+  raw.gsub!(/path = \"[^\"]*LiveActitiyAttributes[^\"]*\";/, 'path = \"LiveActivityAttributes.swift\";')
+  raw.gsub!(/LiveActitiyAttributes/, 'LiveActivityAttributes')
   end
 
 
