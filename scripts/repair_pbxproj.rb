@@ -1456,6 +1456,27 @@ if File.exist?(pbx_path)
   raw.gsub!(/path = "[^"]*\/(LiveActivity\.swift|LiveActivityBundle\.swift|LiveActivity\+Helper\.swift)";/, 'path = "\\1";')
   raw.gsub!(/path = "[^"]*(LiveActivity\.swift|LiveActivityBundle\.swift|LiveActivity\+Helper\.swift)";/, 'path = "\\1";')
 
+
+  # Remove directory "LiveActivity" references from sources phases (root cause of duplicate stringsdata)
+  # These are BuildFile lines like:
+  #   DDCEBF5B2CC1B76400DF4C36 /* LiveActivity in Sources */,
+  # and the corresponding BuildFile definitions.
+  dir_uuids = ["DDCEBF5B2CC1B76400DF4C36", "BDF34F932C10D0E100D51995"]
+  dir_uuids.each do |uuid|
+    # Remove from sources lists (with or without trailing comma)
+    raw.gsub!(/\t\t#{uuid} \/\* LiveActivity in Sources \*\/,\n/, "")
+    raw.gsub!(/\t\t#{uuid} \/\* LiveActivity in Sources \*\/$/, "")
+    raw.gsub!(/\t\t\t\t#{uuid} \/\* LiveActivity in Sources \*\/,\n/, "")
+    # Remove the BuildFile definition block
+    raw.gsub!(/\t\t#{uuid} \/\* LiveActivity in Sources \*\/ = \{isa = PBXBuildFile; fileRef = [0-9A-F]+ \/\* LiveActivity \*\/; \};\n/, "")
+  end
+
+  if raw != orig
+    File.write(pbx_path, raw)
+    puts "  LATE-RAW-HAMMER: removed directory LiveActivity sources refs (DDCEBF5B etc.)"
+  end
+
+
   # Typo fix
   raw.gsub!(/LiveActitiyAttributes/, 'LiveActivityAttributes')
 
