@@ -896,8 +896,6 @@ late_corrected = 0
 project.files.each do |fr|
   next unless fr.respond_to?(:path) && fr.path
   next if fr.path.start_with?("Trio/")
-  next if fr.path.include?("LiveActivity")
-  next if fr.path.include?("LiveActivity")  # do not touch LiveActivity paths here
 
   bare = fr.path
   candidate = "Trio/#{bare}"
@@ -915,136 +913,6 @@ if late_corrected > 0
 else
   puts "Late correction: no additional fixes needed."
 end
-
-
-# ============================================================
-# 2.9 Final ultra-late LiveActivity group path + re-parent + stack strip (raw + gem)
-#     This runs after ALL other sanitizers, Trio/ corrections, Pebble, re-serialization.
-#     It forces the critical extension group (owner of Views) to path="LiveActivity"
-#     and strips every known stacking pattern seen in previous failures.
-#     Raw text edit is the hammer to guarantee the pbxproj text the Fastlane sees is clean.
-# ============================================================
-puts "2.9 Final ultra-late LiveActivity path/re-parent/strip..."
-
-# Re-open project for gem attempt
-begin
-  project = Xcodeproj::Project.open(project_path)
-  target_group = nil
-  views_id = "DDCEBF412CC1B42500DF4C36"
-  widget_names = ["LiveActivity.swift", "LiveActivityBundle.swift", "LiveActivity+Helper.swift"]
-
-  project.main_group.recursive_children_groups.each do |g|
-    path = (g.path || "").to_s
-    name = (g.name || "").to_s
-    has_views = g.children.any? { |c| (c.name || "").to_s == "Views" || (c.uuid || "") == views_id }
-    has_widgets = g.children.any? do |c|
-      p = (c.path || c.name || "").to_s
-      widget_names.any? { |w| p.end_with?(w) }
-    end
-    if (name == "LiveActivity" || path.include?("LiveActivity")) && (has_views || has_widgets)
-      target_group = g
-      puts "  [2.9] Matched target LiveActivity group: path=#{path}, has_views=#{has_views}"
-      break
-    end
-  end
-
-  if target_group
-    target_group.path = "LiveActivity"
-    puts "  [2.9] Gem: forced path to LiveActivity"
-
-    # Re-parent to root
-    root = project.main_group
-    trio = project.main_group.children.find { |c| (c.name || "").to_s == "Trio" && c.is_a?(Xcodeproj::Project::Object::PBXGroup) }
-    root = trio if trio
-    project.main_group.recursive_children_groups.each do |p|
-      if p.children.include?(target_group) && p != root
-        p.children.delete(target_group) rescue nil
-        puts "  [2.9] Removed from nested parent"
-      end
-    end
-    root.children << target_group unless root.children.include?(target_group)
-    puts "  [2.9] Re-parent attempt done"
-
-    # Clean child file refs
-    target_group.children.each do |ch|
-      if ch.respond_to?(:path) && ch.path
-        if ch.path.to_s.include?("Trio/") || ch.path.to_s.include?("Sources/Services")
-          ch.path = File.basename(ch.path.to_s)
-          puts "  [2.9] Cleaned child file path to #{ch.path}"
-        end
-      end
-    end
-    project.save
-    puts "  [2.9] Saved after gem LiveActivity fix"
-  else
-    puts "  [2.9] No target group matched in gem pass"
-  end
-rescue => e
-  puts "  [2.9] Gem pass error (continuing with raw): #{e.message[0..150]}"
-end
-
-# === RAW TEXT HAMMER (guaranteed to affect the file Fastlane reads) ===
-pbx_path = if ENV["GITHUB_WORKSPACE"]
-  File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj", "project.pbxproj")
-else
-  "Trio.xcodeproj/project.pbxproj"
-end
-
-if File.exist?(pbx_path)
-  raw = File.read(pbx_path)
-  orig_size = raw.size
-
-  # Force exact known bad group to clean LiveActivity path + children (the extension one)
-  # This overrides any nesting
-  raw.gsub!(/6B1A8D1C2B14D91600E76752 \/\* LiveActivity \*\/ = \{[^}]*?
-		\};/m, <<~'GRP'.chomp + "
-		};")
-		6B1A8D1C2B14D91600E76752 /* LiveActivity */ = {
-			isa = PBXGroup;
-			children = (
-				DDCEBF412CC1B42500DF4C36 /* Views */,
-				6B1A8D1D2B14D91600E76752 /* LiveActivityBundle.swift */,
-				6B1A8D1F2B14D91600E76752 /* LiveActivity.swift */,
-				6B1A8D232B14D91700E76752 /* Assets.xcassets */,
-				6B1A8D252B14D91700E76752 /* Info.plist */,
-				DDCEBF5A2CC1B76400DF4C36 /* LiveActivity+Helper.swift */,
-			);
-			path = "LiveActivity";
-			sourceTree = "<group>";
-GRP
-
-  # Strip every stacked variant seen in failures for any LiveActivity group path
-  patterns = [
-    %r{path = "Trio/Sources/Trio/Sources/Services/Trio/Sources/Services/LiveActivity";},
-    %r{path = "Trio/Sources/Services/Trio/Sources/Services/LiveActivity";},
-    %r{path = "Trio/Sources/Trio/Sources/Services/LiveActivity";},
-    %r{path = "[^"]*Trio/[^"]*LiveActivity[^"]*";},
-    %r{path = "[^"]*Sources/Services/LiveActivity[^"]*";},
-  ]
-  patterns.each do |pat|
-    raw.gsub!(pat, 'path = "LiveActivity";')
-  end
-
-  # Any remaining LiveActivity group path that is not exactly "LiveActivity" -> clean
-  raw.gsub!(/path = "[^"]*LiveActivity[^"]*";/, 'path = "LiveActivity";')
-
-  # Clean the widget file refs to bare names (will resolve from the group)
-  raw.gsub!(/path = "[^"]*(LiveActivity\.swift|LiveActivityBundle\.swift|LiveActivity\+Helper\.swift)";/, 'path = "";')
-
-  # Fix the typo Attributes if it appears in bad context (prefer correct spelling for in-app, but clean path)
-  raw.gsub!(/path = "[^"]*LiveActitiyAttributes\.swift";/, 'path = "LiveActivityAttributes.swift";')
-
-  if raw.size != orig_size || raw != File.read(pbx_path)
-    File.write(pbx_path, raw)
-    puts "  [2.9] RAW: Stripped stacked LiveActivity paths, forced group 6B1A8D1C to LiveActivity, cleaned refs"
-  else
-    puts "  [2.9] RAW: No change needed or patterns not matched"
-  end
-else
-  puts "  [2.9] pbx_path not found for raw fix"
-end
-
-puts "2.9 LiveActivity final fix complete."
 
 puts "Round-trip open/save to force clean plist emission..."
 project = Xcodeproj::Project.open(project_path)
@@ -1251,7 +1119,6 @@ corrected = 0
 project.files.each do |fr|
   next unless fr.respond_to?(:path) && fr.path
   next if fr.path.start_with?("Trio/")
-  next if fr.path.include?("LiveActivity")
 
   bare_path = fr.path
   trio_path = "Trio/#{bare_path}"
@@ -1273,7 +1140,6 @@ end
 project.files.each do |fr|
   next unless fr.respond_to?(:path) && fr.path
   next if fr.path.start_with?("Trio/")
-  next if fr.path.include?("LiveActivity")
 
   if fr.path =~ %r{^(Sources|Services|LiveActivity)/}
     candidate = "Trio/#{fr.path}"
@@ -1292,12 +1158,11 @@ end
 puts "Repair script completed successfully with validation."
 
 # ============================================================
-# LATE RAW HAMMER (appended clean version)
-# Runs after the main "Repair script completed" message.
-# Performs final raw text edits on the pbxproj to guarantee
-# the file written to disk for Fastlane is clean.
+# LATE-RAW-HAMMER (final raw text safety net)
+# Appended after main repair. Does direct string edits on the
+# .pbxproj file that will be seen by Fastlane/xcodeproj.
 # ============================================================
-puts "LATE-RAW-HAMMER: final raw text cleanup for Services jam and LiveActivity..."
+puts "LATE-RAW-HAMMER: final raw cleanup pass..."
 
 pbx_path = if ENV["GITHUB_WORKSPACE"]
   File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj", "project.pbxproj")
@@ -1309,35 +1174,31 @@ if File.exist?(pbx_path)
   raw = File.read(pbx_path)
   orig = raw.dup
 
-  # Services jam: insert ); to close the children array before the stray path line
-  # Observed pattern:
-  #   ... /* WatchManager */,
-  #   path = "Trio/Sources/Services";
-  #   sourceTree = "<group>";
-
+  # === Services jam fix (guaranteed last chance) ===
+  # Insert ");" to close the Services children array.
   raw.gsub!(/(WatchManager \*\/,\s*\n)(\s*path = "Trio\/Sources\/Services";)/, "\\1\t\t\t);\n\\2")
   raw.gsub!(/(,\s*\n)(\s*path = "Trio\/Sources\/Services";)/, "\\1\t\t\t);\n\\2")
   raw.gsub!(/(,\s*\n)(\s*path = "Trio\/Sources\/Services";\s*\n\s*sourceTree = "<group>";)/, "\\1\t\t\t);\n\\2")
 
-  # LiveActivity group path cleanup (any stacked or Services-nested)
+  # === LiveActivity cleanup ===
   raw.gsub!(/path = "[^"]*LiveActivity[^"]*";/, 'path = "LiveActivity";')
   raw.gsub!(/path = "Trio\/Sources\/Services\/LiveActivity";/, 'path = "LiveActivity";')
 
-  # Clean widget file refs
+  # Widget files to bare names
   raw.gsub!(/path = "[^"]*\/(LiveActivity\.swift|LiveActivityBundle\.swift|LiveActivity\+Helper\.swift)";/, 'path = "\\1";')
   raw.gsub!(/path = "[^"]*(LiveActivity\.swift|LiveActivityBundle\.swift|LiveActivity\+Helper\.swift)";/, 'path = "\\1";')
 
-  # Typo fix
+  # Typo
   raw.gsub!(/LiveActitiyAttributes/, 'LiveActivityAttributes')
 
   if raw != orig
     File.write(pbx_path, raw)
-    puts "LATE-RAW-HAMMER: applied final raw fixes (Services jam closed + LiveActivity cleaned)"
+    puts "LATE-RAW-HAMMER: applied fixes (Services jam + LiveActivity)"
   else
-    puts "LATE-RAW-HAMMER: no changes needed (patterns not present or already clean)"
+    puts "LATE-RAW-HAMMER: no changes (already clean or patterns not matched)"
   end
 else
-  puts "LATE-RAW-HAMMER: pbx_path not found"
+  puts "LATE-RAW-HAMMER: pbx not found"
 end
 
-puts "LATE-RAW-HAMMER complete. Script exiting."
+puts "LATE-RAW-HAMMER complete."
