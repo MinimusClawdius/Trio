@@ -513,6 +513,56 @@ else
 end
 
 # ============================================================
+
+# ============================================================
+# 2.7 Fix LiveActivity group path for extension (the one owning "Views")
+#     The extension uses fileSystemSynchronizedGroups for "Views" under a
+#     "LiveActivity" PBXGroup. If that group is nested under Sources/Services
+#     in the tree, resolved paths become wrong. Force its path to "LiveActivity"
+#     (root-relative) so the widget files resolve correctly from ./LiveActivity/.
+# ============================================================
+puts "Fixing LiveActivity group path for extension Views..."
+# Find the group that contains the Views synchronized group (the extension's LiveActivity parent)
+views_group_id = "DDCEBF412CC1B42500DF4C36"
+live_activity_group = nil
+
+project.main_group.recursive_children_groups.each do |g|
+  if g.children && g.children.any? { |c| c.uuid == views_group_id || (c.name || "").to_s == "Views" }
+    live_activity_group = g
+    break
+  end
+end
+
+if live_activity_group
+  orig_path = live_activity_group.path.to_s
+  if orig_path != "LiveActivity" && !orig_path.end_with?("/LiveActivity")
+    puts "  Setting LiveActivity group path: '#{orig_path}' -> 'LiveActivity'"
+    live_activity_group.path = "LiveActivity"
+  else
+    puts "  LiveActivity group path already clean: #{orig_path}"
+  end
+
+  # Also ensure the core widget files are children of this group with clean paths
+  core_widget = ["LiveActivity.swift", "LiveActivityBundle.swift", "LiveActivity+Helper.swift"]
+  core_widget.each do |fname|
+    ref = project.files.find { |f| f.path && f.path.to_s.end_with?(fname) }
+    if ref
+      if ref.path.to_s != fname
+        puts "  Cleaning path on #{fname}: #{ref.path} -> #{fname}"
+        ref.path = fname
+      end
+      # Ensure it's under the live_activity_group if possible (add as child if missing)
+      unless live_activity_group.children.include?(ref)
+        # Note: may already be referenced; adding again is usually safe or no-op
+        live_activity_group.children << ref rescue nil
+        puts "  Ensured #{fname} is child of the LiveActivity group"
+      end
+    end
+  end
+else
+  puts "  WARNING: Could not find the LiveActivity group owning Views"
+end
+
 # 3. Final save
 # ============================================================
 
