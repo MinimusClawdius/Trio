@@ -573,6 +573,35 @@ project.save
 puts "Saved after aggressive re-creation."
 
 # One more round-trip to be sure
+
+# ============================================================
+# 9b. Late aggressive Trio/ path correction (run after all re-serialization)
+#     This is the last chance to fix any FileRefs that still have bare paths.
+# ============================================================
+puts "Late aggressive Trio/ path correction..."
+
+late_corrected = 0
+project.files.each do |fr|
+  next unless fr.respond_to?(:path) && fr.path
+  next if fr.path.start_with?("Trio/")
+
+  bare = fr.path
+  candidate = "Trio/#{bare}"
+
+  if File.exist?(candidate) && !File.exist?(bare)
+    puts "  [LATE] Fixing #{bare} -> #{candidate}"
+    fr.path = candidate
+    late_corrected += 1
+  end
+end
+
+if late_corrected > 0
+  puts "Late correction fixed #{late_corrected} path(s). Re-saving..."
+  project.save
+else
+  puts "Late correction: no additional fixes needed."
+end
+
 puts "Round-trip open/save to force clean plist emission..."
 project = Xcodeproj::Project.open(project_path)
 project.save
