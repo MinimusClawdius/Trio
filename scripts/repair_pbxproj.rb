@@ -384,34 +384,40 @@ else
     project.main_group.children << services_group
   end
 
-  # Remove any existing Pebble subgroups and their file refs to start clean
+  # Remove any existing Pebble subgroups (search whole project to avoid multiple-parent issues)
+  puts "Aggressive cleanup of any pre-existing Pebble groups..."
   ["PebbleManager", "PebbleService"].each do |gname|
-  existing = services_group.children.find { |c| (c.respond_to?(:path) && c.path == gname) || (c.respond_to?(:name) && c.name == gname) }
-  if existing
-    # Remove file refs from build phases first
-    project.targets.each do |t|
-      phase = t.source_build_phase
-      if phase
-        existing.children.to_a.each do |fr|
-          phase.files.each do |bf|
-            if bf.file_ref == fr
-              phase.remove_file_reference(fr) rescue nil
+    project.objects.select { |o| o.is_a?(Xcodeproj::Project::Object::PBXGroup) && ((o.path == gname) || (o.name == gname)) }.each do |existing|
+      begin
+        parent = existing.parent
+        if parent && parent.children.include?(existing)
+          parent.children.delete(existing)
+          puts "  Detached stale #{gname} (#{existing.uuid}) from parent"
+        end
+        # Also remove any file refs belonging to it from build phases
+        project.targets.each do |t|
+          phase = t.source_build_phase
+          next unless phase
+          existing.children.to_a.each do |fr|
+            phase.files.to_a.each do |bf|
+              if (bf.respond_to?(:file_ref) && bf.file_ref == fr) || (bf.respond_to?(:file_ref) && bf.file_ref && bf.file_ref.path == fr.path)
+                phase.remove_file_reference(fr) rescue nil
+              end
             end
           end
         end
+      rescue => e
+        puts "  Warning during cleanup of #{gname}: #{e.message}"
       end
     end
-    services_group.children.delete(existing)
-    puts "Removed stale #{gname} group"
   end
-end
 
-# Create fresh subgroups
-pm_group = project.new_group("PebbleManager", "PebbleManager")
-services_group.children << pm_group
-ps_group = project.new_group("PebbleService", "PebbleService")
-services_group.children << ps_group
-puts "Created fresh Pebble subgroups"
+  # Create fresh subgroups under Services
+  pm_group = project.new_group("PebbleManager", "PebbleManager")
+  services_group.children << pm_group rescue (puts "Warning: could not attach pm_group directly")
+  ps_group = project.new_group("PebbleService", "PebbleService")
+  services_group.children << ps_group rescue (puts "Warning: could not attach ps_group directly")
+  puts "Created fresh Pebble subgroups"
 
 pebble_files = [
   { path: "Trio/Sources/Services/PebbleManager/PebbleManager.swift", group: pm_group },
@@ -424,32 +430,54 @@ pebble_files = [
   { path: "Trio/Sources/Services/PebbleService/PebbleService.swift", group: ps_group },
   { path: "Trio/Sources/Services/PebbleService/PebbleServiceManager.swift", group: ps_group },
   { path: "Trio/Sources/Services/PebbleService/PebbleServiceFormView.swift", group: ps_group },
-  { path: "Trio/Sources/Services/PebbleService/PebbleService+UI.swift", group: ps_group }
+  { path: "Trio/Sources/Services/PebbleService/PebbleService+UI.swift", group: ps_group },
+  # Settings UI files that reference the Pebble types (critical for compile)
+  { path: "Trio/Sources/Modules/Settings/View/PebbleServiceStartView.swift", group: ps_group },
+  { path: "Trio/Sources/Modules/Settings/View/PebbleServiceConfigViews.swift", group: ps_group }
 ]
 
 main_target = project.targets.find { |t| t.name.to_s == "Trio" }
 source_phase = main_target&.source_build_phase
 
-pebble_files.each do |entry|
-  rel = entry[:path]
-  target_group = entry[:group]
-  next unless File.exist?(rel)
+begin
+  pebble_files.each do |entry|
+    rel = entry[:path]
+    target_group = entry[:group]
+    next unless File.exist?(rel)
 
-  basename = File.basename(rel)
-  # Always add fresh via the API (it handles quoting for + in filenames)
-  file_ref = target_group.new_file(rel)
-  puts "Added (or re-added) #{basename} via new_file"
+    basename = File.basename(rel)
+    # Always add fresh via the API (it handles quoting for + in filenames)
+    file_ref = nil
+    begin
+      file_ref = target_group.new_file(rel)
+      puts "Added (or re-added) #{basename} via new_file"
+    rescue => e
+      puts "  Warning: could not new_file #{basename}: #{e.message}"
+    end
 
-  if source_phase && file_ref
-    # Ensure it is in the build phase
-    unless source_phase.files.any? { |bf| (bf.file_ref == file_ref) rescue false }
-      source_phase.add_file_reference(file_ref, true)
-      puts "Wired #{basename} to main target source phase"
+    if source_phase && file_ref
+      begin
+        # Ensure it is in the build phase
+        unless source_phase.files.any? { |bf| (bf.file_ref == file_ref) rescue false }
+          source_phase.add_file_reference(file_ref, true)
+          puts "Wired #{basename} to main target source phase"
+        end
+      rescue => e
+        puts "  Warning wiring #{basename}: #{e.message}"
+      end
     end
   end
+  puts "Pebble clean integration complete."
+  project.save
+  puts "Saved after Pebble block"
+rescue => e
+  puts "WARNING: Pebble integration block hit an error but continuing: #{e.message}"
+  puts e.backtrace.first(3).join("\n")
+  begin
+    project.save
+  rescue
+  end
 end
-
-puts "Pebble clean integration complete."
 end   # end of if ENV["SKIP_PEBBLE"] == "1" else block
 # ============================================================
 # 5. Force clean re-serialization of Appearance and Network groups
@@ -844,66 +872,3 @@ if corrected > 0
 end
 
 puts "Repair script completed successfully with validation."
-
-# ============================================================
-# 10. Add any missing Pebble integration files.
-#     The Pebble code lives on disk under Trio/Sources/Services/Pebble*
-#     and Trio/Sources/Modules/Settings/View/*Pebble*.swift but was
-#     never added to the pbxproj (common after private-fork merges).
-#     This ensures they get FileReferences + added to the Trio target
-#     sources phase.
-# ============================================================
-puts "Checking for missing Pebble source files..."
-
-pebble_dirs = [
-  "Trio/Sources/Services/PebbleManager",
-  "Trio/Sources/Services/PebbleService",
-  "Trio/Sources/Modules/Settings/View"
-]
-
-added = 0
-
-# Find main target (usually 'Trio')
-main_target = project.targets.find { |t| t.name == "Trio" } || project.targets.first
-sources_phase = main_target.source_build_phase
-
-# Helper to find or create a group by path segments
-def find_or_create_group(project, base_group, path_segments)
-  current = base_group
-  path_segments.each do |seg|
-    child = current.children.find { |c| c.is_a?(Xcodeproj::Project::Object::PBXGroup) && (c.path == seg || c.name == seg) }
-    if child.nil?
-      child = current.new_group(seg, seg)
-      puts "  Created group: #{seg}"
-    end
-    current = child
-  end
-  current
-end
-
-pebble_dirs.each do |dir|
-  next unless Dir.exist?(dir)
-  Dir.glob(File.join(dir, "*.swift")).each do |full_path|
-    relative = full_path.sub(/^Trio\//, "")  # e.g. Sources/Services/PebbleManager/...
-    # Check if already in project
-    existing = project.files.find { |f| f.path && (f.path == "Trio/#{relative}" || f.path == relative) }
-    next if existing
-
-    # Determine group path
-    segments = relative.split("/")[0..-2]  # everything but filename
-    group = find_or_create_group(project, project.main_group, segments)
-
-    file_ref = group.new_file("Trio/#{relative}")
-    sources_phase.add_file_reference(file_ref)
-
-    puts "  Added missing Pebble file: Trio/#{relative}"
-    added += 1
-  end
-end
-
-if added > 0
-  puts "Added #{added} missing Pebble file(s) to the project."
-  project.save
-else
-  puts "No missing Pebble files to add (or already present in pbxproj)."
-end
