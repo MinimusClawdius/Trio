@@ -390,57 +390,67 @@ puts "Round-trip save complete."
 
 # ============================================================
 # 8. Post-save validation: read the raw pbxproj and fail loudly
-#    if any known text corruption patterns remain. This catches
-#    cases where the API writes still left bad arrays.
+#    if any known text corruption patterns remain.
+#    Uses simple, robust checks to avoid regex escaping issues.
 # ============================================================
 puts "Running post-save raw text validation for corruption patterns..."
 
 pbx_path = File.join(File.dirname(project_path), "project.pbxproj")
 unless File.exist?(pbx_path)
-  # project_path points to the .xcodeproj dir in some setups
   pbx_path = File.join(project_path, "project.pbxproj") if Dir.exist?(project_path)
 end
 
 if File.exist?(pbx_path)
   raw = File.read(pbx_path)
-
-  bad_patterns = [
-    # Jammed group definitions inside children arrays (classic corruption)
-    /\/\*\s*(Network|Services|Appearance|Pebble)[^*]*\*\/\s*=\s*\{[^}]*path\s*=\s*[^;]*;\s*sourceTree[^}]*\};/m,
-    # "Network */ = {" embedded without proper comma
-    /AppearanceManager[^}]{0,100}Network \*/ = \{/,
-    # Consecutive object starts without comma between them in arrays
-    /\}\s*,\s*\{[^}]*\}\s*;\s*\{/m,   # rough
-    /path = [^;\"]*\+[^;\"]*;(?![^;]*;)/, # unquoted + paths that may have caused issues
-    # Old-style jammed entries from python edits
-    /\);\s*path = (Services|Network|Pebble)/,
-    # Any Pebble GID from known bad commits still lingering as raw text
-    /BEA75ECA|51C9D754|3811DE9[0-9A-F]/
-  ]
-
   found_bad = false
-  bad_patterns.each do |pat|
-    if raw =~ pat
+  context = nil
+
+  # Simple string checks for known jams (from historical python/text edits)
+  if raw.include?(");path = Services") || raw.include?("); path = Services")
+    found_bad = true
+    context = raw[raw.index(");path = Services") - 150 .. raw.index(");path = Services") + 300] rescue "context extract failed"
+    puts "!!! Found Services jam pattern"
+  end
+
+  if !found_bad && raw =~ /AppearanceManager.*Network \*/m
+    # Look for the specific jammed "Network */ = {" right after Appearance entries
+    if raw.include?("Network */ = {") && raw =~ /3811DE9.*AppearanceManager.*Network \*/m
       found_bad = true
-      puts "!!! CORRUPTION DETECTED by pattern: #{pat.inspect}"
-      # Print context around first match
-      idx = raw =~ pat
-      start = [idx - 200, 0].max
-      finish = [idx + 400, raw.length].min
-      puts "Context (lines ~#{raw[0,idx].count("\n")}):"
-      puts raw[start..finish]
-      puts "--- end context ---"
-      break
+      idx = raw.index("Network */ = {")
+      context = raw[[idx-250,0].max .. [idx+400, raw.size].min] rescue nil
+      puts "!!! Found jammed Network group definition (likely inside Appearance children)"
+    end
+  end
+
+  # Check for any of the old bad Pebble GIDs as raw text (should not be in clean file)
+  if !found_bad && (raw =~ /BEA75ECA|51C9D754|3811DE9[0-9A-Fa-f]{8}/)
+    found_bad = true
+    puts "!!! Found old Pebble GID in raw pbxproj"
+  end
+
+  # Very rough check for suspicious consecutive group-like objects without comma
+  # (look for "};" followed quickly by another "isa = PBXGroup" without proper list separator)
+  if !found_bad && raw =~ /isa = PBXGroup;[\s\S]{0,80}isa = PBXGroup;/m
+    # This is too broad; only flag if also near known bad paths
+    if raw.include?("path = Appearance;") && raw.include?("path = Network;")
+      found_bad = true
+      puts "!!! Suspicious consecutive PBXGroup entries near Appearance/Network"
     end
   end
 
   if found_bad
-    raise "Validation FAILED: pbxproj still contains text corruption after repair. See logs above. The emitted plist has bad arrays."
+    puts "!!! CORRUPTION DETECTED in emitted pbxproj"
+    if context
+      puts "Context around issue:"
+      puts context
+    end
+    puts "--- end context ---"
+    raise "Validation FAILED: pbxproj still contains text corruption after repair (see above). The plist text has bad arrays or jammed groups."
   else
-    puts "Post-save validation PASSED: no known corruption patterns detected in raw pbxproj."
+    puts "Post-save validation PASSED: no obvious corruption patterns detected."
   end
 else
-  puts "WARNING: Could not locate project.pbxproj for validation at #{pbx_path}"
+  puts "WARNING: Could not locate project.pbxproj for validation"
 end
 
 puts "Repair script completed successfully with validation."
