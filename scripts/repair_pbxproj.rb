@@ -1344,27 +1344,3 @@ end
 puts "LATE-RAW-HAMMER complete. Script exiting."
 
 # ============================================================
-# FINAL ATTRIBUTES NUKE (typo-aware, appended cleanly)
-# ============================================================
-puts "FINAL-ATTRIBUTES-NUKE: removing bad Live*Attributes BuildFiles..."
-pbx = ENV["GITHUB_WORKSPACE"] ? File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj", "project.pbxproj") : "Trio.xcodeproj/project.pbxproj"
-if File.exist?(pbx)
-  raw = File.read(pbx)
-  orig = raw.dup
-  bad_dd = "6BCF84DD2B16843A003AD46E"
-  bad_de = "6BCF84DE2B16843A003AD46E"
-  ["LiveActivityAttributes.swift", "LiveActitiyAttributes.swift"].each do |sp|
-    raw.gsub!(/^\\t\\t#{bad_dd} \\/\\* #{sp} in Sources \\*\\/ = \\{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \\/\\* #{sp} \\*\\/; \\};\\s*$/, "")
-    raw.gsub!(/^\\t\\t#{bad_de} \\/\\* #{sp} in Sources \\*\\/ = \\{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \\/\\* #{sp} \\*\\/; \\};\\s*$/, "")
-    raw.gsub!(/^\\t\\t\\t\\t#{bad_dd} \\/\\* #{sp} in Sources \\*\\/,?\s*$/, "")
-    raw.gsub!(/^\\t\\t\\t\\t#{bad_de} \\/\\* #{sp} in Sources \\*\\/,?\s*$/, "")
-    raw.gsub!(/#{bad_dd} \\/\\* #{sp} in Sources \\*\//, "")
-    raw.gsub!(/#{bad_de} \\/\\* #{sp} in Sources \\*\//, "")
-  end
-  if raw != orig
-    File.write(pbx, raw)
-    puts "FINAL-ATTRIBUTES-NUKE: removed bad entries"
-  else
-    puts "FINAL-ATTRIBUTES-NUKE: no bad entries found to remove"
-  end
-end
