@@ -7,6 +7,34 @@
 # before attempting to save, then re-wires the critical LiveActivity files.
 #
 # Run with: bundle exec ruby scripts/repair_pbxproj.rb
+# ============================================================
+# EARLY RAW ATTRIBUTES NUKE (before any project load)
+# ============================================================
+puts "EARLY-ATTRIBUTES-NUKE: removing bad LiveActivityAttributes from extension (pre-load)..."
+pbx_early = if ENV["GITHUB_WORKSPACE"]
+  File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj", "project.pbxproj")
+else
+  "Trio.xcodeproj/project.pbxproj"
+end
+if File.exist?(pbx_early)
+  raw = File.read(pbx_early)
+  o = raw.dup
+  bad_dd = "6BCF84DD2B16843A003AD46E"
+  bad_de = "6BCF84DE2B16843A003AD46E"
+  raw.gsub!(/^		#{bad_dd} \/\* LiveActivityAttributes\.swift in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* LiveActivityAttributes\.swift \*\/; \};\s*$/, '')
+  raw.gsub!(/^		#{bad_de} \/\* LiveActivityAttributes\.swift in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* LiveActivityAttributes\.swift \*\/; \};\s*$/, '')
+  raw.gsub!(/^				#{bad_dd} \/\* LiveActivityAttributes\.swift in Sources \*\/,?\s*$/, '')
+  raw.gsub!(/^				#{bad_de} \/\* LiveActivityAttributes\.swift in Sources \*\/,?\s*$/, '')
+  raw.gsub!(/#{bad_dd} \/\* LiveActivityAttributes\.swift in Sources \*\//, '')
+  raw.gsub!(/#{bad_de} \/\* LiveActivityAttributes\.swift in Sources \*\//, '')
+  if raw != o
+    File.write(pbx_early, raw)
+    puts "EARLY-ATTRIBUTES-NUKE: applied (bad Attributes BuildFiles removed pre-load)"
+  else
+    puts "EARLY-ATTRIBUTES-NUKE: no change needed (pre-load)"
+  end
+end
+
 
 require "xcodeproj"
 
