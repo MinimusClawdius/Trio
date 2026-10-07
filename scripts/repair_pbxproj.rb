@@ -997,7 +997,7 @@ rescue => e
   puts "  [2.9] Gem pass error (continuing with raw): #{e.message[0..150]}"
 end
 
-# === RAW TEXT HAMMER (guaranteed to affect the file Fastlane reads) ===
+# === RAW TEXT HAMMER (safe, no heredocs) ===
 pbx_path = if ENV["GITHUB_WORKSPACE"]
   File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj", "project.pbxproj")
 else
@@ -1008,57 +1008,44 @@ if File.exist?(pbx_path)
   raw = File.read(pbx_path)
   orig_size = raw.size
 
-  # Force exact known bad group to clean LiveActivity path + children (the extension one)
-  # This overrides any nesting
-  raw.gsub!(/6B1A8D1C2B14D91600E76752 \/\* LiveActivity \*\/ = \{[^}]*?
-		\};/m, <<~'GRP'.chomp + "
-		};")
-		6B1A8D1C2B14D91600E76752 /* LiveActivity */ = {
-			isa = PBXGroup;
-			children = (
-				DDCEBF412CC1B42500DF4C36 /* Views */,
-				6B1A8D1D2B14D91600E76752 /* LiveActivityBundle.swift */,
-				6B1A8D1F2B14D91600E76752 /* LiveActivity.swift */,
-				6B1A8D232B14D91700E76752 /* Assets.xcassets */,
-				6B1A8D252B14D91700E76752 /* Info.plist */,
-				DDCEBF5A2CC1B76400DF4C36 /* LiveActivity+Helper.swift */,
-			);
-			path = "LiveActivity";
-			sourceTree = "<group>";
-GRP
-
-  # Strip every stacked variant seen in failures for any LiveActivity group path
-  patterns = [
-    %r{path = "Trio/Sources/Trio/Sources/Services/Trio/Sources/Services/LiveActivity";},
-    %r{path = "Trio/Sources/Services/Trio/Sources/Services/LiveActivity";},
-    %r{path = "Trio/Sources/Trio/Sources/Services/LiveActivity";},
-    %r{path = "[^"]*Trio/[^"]*LiveActivity[^"]*";},
-    %r{path = "[^"]*Sources/Services/LiveActivity[^"]*";},
-  ]
-  patterns.each do |pat|
-    raw.gsub!(pat, 'path = "LiveActivity";')
-  end
-
-  # Any remaining LiveActivity group path that is not exactly "LiveActivity" -> clean
+  # Clean any stacked or wrong LiveActivity group paths
   raw.gsub!(/path = "[^"]*LiveActivity[^"]*";/, 'path = "LiveActivity";')
+  raw.gsub!(/path = "Trio\/Sources\/Trio\/Sources[^"]*"/, 'path = "LiveActivity"')
+  raw.gsub!(/path = "Trio\/Sources\/Services\/Trio\/Sources\/Services\/LiveActivity";/, 'path = "LiveActivity";')
+  raw.gsub!(/path = "Trio\/Sources\/Trio\/Sources\/Services\/LiveActivity";/, 'path = "LiveActivity";')
+  raw.gsub!(/path = "[^"]*Trio\/[^"]*LiveActivity[^"]*";/, 'path = "LiveActivity";')
+  raw.gsub!(/path = "[^"]*Sources\/Services\/LiveActivity[^"]*";/, 'path = "LiveActivity";')
 
-  # Clean the widget file refs to bare names (will resolve from the group)
-  raw.gsub!(/path = "[^"]*(LiveActivity\.swift|LiveActivityBundle\.swift|LiveActivity\+Helper\.swift)";/, 'path = "";')
+  # Clean widget file refs
+  raw.gsub!(/path = "[^"]*(LiveActivity\.swift|LiveActivityBundle\.swift|LiveActivity\+Helper\.swift)";/, 'path = "LiveActivity.swift";')
 
-  # Fix the typo Attributes if it appears in bad context (prefer correct spelling for in-app, but clean path)
+  # Fix typo Attributes path if present
   raw.gsub!(/path = "[^"]*LiveActitiyAttributes\.swift";/, 'path = "LiveActivityAttributes.swift";')
+
+  # Also run the Attributes BuildFile nuke here early (in case final is after a crash point)
+  bad_dd = "6BCF84DD2B16843A003AD46E"
+  bad_de = "6BCF84DE2B16843A003AD46E"
+  ["LiveActivityAttributes.swift", "LiveActitiyAttributes.swift"].each do |sp|
+    raw.gsub!(/^\t\t#{bad_dd} \/\* #{sp} in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* #{sp} \*\/; \};\s*$/, "")
+    raw.gsub!(/^\t\t#{bad_de} \/\* #{sp} in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* #{sp} \*\/; \};\s*$/, "")
+    raw.gsub!(/^\t\t\t\t#{bad_dd} \/\* #{sp} in Sources \*\/,?\s*$/, "")
+    raw.gsub!(/^\t\t\t\t#{bad_de} \/\* #{sp} in Sources \*\/,?\s*$/, "")
+    raw.gsub!(/#{bad_dd} \/\* #{sp} in Sources \*\//, "")
+    raw.gsub!(/#{bad_de} \/\* #{sp} in Sources \*\//, "")
+  end
 
   if raw.size != orig_size || raw != File.read(pbx_path)
     File.write(pbx_path, raw)
-    puts "  [2.9] RAW: Stripped stacked LiveActivity paths, forced group 6B1A8D1C to LiveActivity, cleaned refs"
+    puts "  [2.9] RAW: Cleaned LiveActivity paths and nuked bad Attributes BuildFiles"
   else
-    puts "  [2.9] RAW: No change needed or patterns not matched"
+    puts "  [2.9] RAW: No change needed"
   end
 else
   puts "  [2.9] pbx_path not found for raw fix"
 end
 
 puts "2.9 LiveActivity final fix complete."
+
 
 puts "Round-trip open/save to force clean plist emission..."
 project = Xcodeproj::Project.open(project_path)
