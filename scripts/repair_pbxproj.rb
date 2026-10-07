@@ -516,53 +516,42 @@ end
 
 if live_target
   puts "Re-cleaning sources for #{live_target.name}"
+  source_phase = live_target.source_build_phase
+
   # === CRITICAL: Remove any directory "LiveActivity" reference from extension sources ===
-  # This directory ref + explicit files causes "Multiple commands produce .stringsdata"
+  # Directory ref + individual files = duplicate compile tasks -> "Multiple commands produce .stringsdata"
   if source_phase
     removed_any = false
+    dir_uuids = ["DDCEBF5B2CC1B76400DF4C36", "BDF34F922C10D0E100D51995"]
     source_phase.files.each do |bf|
-      if bf.file_ref
-        pname = (bf.file_ref.path || bf.file_ref.name || "").to_s
-        if pname == "LiveActivity" || pname.end_with?("/LiveActivity") || pname == "LiveActivity/"
-          puts "  REMOVING directory ref 'LiveActivity' from LiveActivityExtension sources (root cause of duplicate stringsdata)"
-          source_phase.remove_file_reference(bf.file_ref) rescue nil
-          removed_any = true
-        end
+      next unless bf.file_ref
+      ref = bf.file_ref
+      pname = (ref.path || ref.name || "").to_s
+      is_dir = (pname == "LiveActivity" || pname.end_with?("/LiveActivity") || pname == "LiveActivity/")
+      is_dir ||= dir_uuids.include?(ref.uuid.to_s)
+      if is_dir
+        puts "  REMOVING directory ref 'LiveActivity' (#{pname || ref.uuid}) from LiveActivityExtension sources"
+        source_phase.remove_file_reference(ref) rescue nil
+        removed_any = true
       end
     end
     puts "  No directory LiveActivity ref found in extension sources" unless removed_any
   end
 
-  # Remove any directory "LiveActivity" reference from the sources phase (individual files only)
+  # Remove bad BuildFile refs (typo Attributes, stacked paths)
   if source_phase
+    bad_basenames = ["LiveActitiyAttributes.swift"]
     source_phase.files.each do |bf|
-      if bf.file_ref && bf.file_ref.path
-        p = bf.file_ref.path.to_s
-        if p == "LiveActivity" || p.end_with?("/LiveActivity")
-          puts "  Removing directory reference 'LiveActivity' from extension sources (causes dups)"
-          source_phase.remove_file_reference(bf.file_ref) rescue nil
-        end
+      next unless bf.file_ref && bf.file_ref.path
+      p = bf.file_ref.path.to_s
+      if bad_basenames.any? { |b| p.end_with?(b) } || p.include?("Trio/Sources/Trio") || p.include?("/Trio/Trio/")
+        puts "  Removing bad ref from extension: #{p}"
+        source_phase.remove_file_reference(bf.file_ref) rescue nil
       end
     end
   end
 
-  source_phase = live_target.source_build_phase
-
-  # Remove any BuildFile that references the typo or obviously bad LiveActivity files
-  bad_basenames = ["LiveActitiyAttributes.swift"]
-  if source_phase
-    source_phase.files.each do |bf|
-      if bf.file_ref && bf.file_ref.path
-        p = bf.file_ref.path.to_s
-        if bad_basenames.any? { |b| p.end_with?(b) } || p.include?("Trio/Sources/Trio") || p.include?("/Trio/Trio/")
-          puts "  Removing bad ref from extension: #{p}"
-          source_phase.remove_file_reference(bf.file_ref) rescue nil
-        end
-      end
-    end
-  end
-
-  # Ensure the core extension files are present with clean paths
+  # Ensure the core extension files are present with clean bare paths
   core_live_files = [
     "LiveActivity/LiveActivity.swift",
     "LiveActivity/LiveActivityBundle.swift",
@@ -573,10 +562,8 @@ if live_target
     next unless File.exist?(rel)
     basename = File.basename(rel)
 
-    # Find or create clean ref
     ref = project.files.find { |f| f.path && (f.path == basename || f.path.end_with?("/#{basename}")) }
     if ref
-      # Force clean path
       if ref.path.to_s != basename && !ref.path.to_s.start_with?("LiveActivity/")
         puts "  Forcing clean path on #{basename}: was #{ref.path}"
         ref.path = basename
@@ -586,29 +573,23 @@ if live_target
       ref = project.new_file(rel)
     end
 
-    # Add to extension sources if not present
-    if source_phase
-      has_it = source_phase.files.any? { |bf| bf.file_ref == ref }
-      unless has_it
-        puts "  Adding clean #{basename} to LiveActivityExtension sources"
-        source_phase.add_file_reference(ref, true)
+    if ref && source_phase
+      # remove existing to dedup then add
+      source_phase.files.select { |bf| bf.file_ref == ref }.each do |bf|
+        source_phase.remove_file_reference(ref) rescue nil
       end
+      puts "  Adding clean #{basename} to LiveActivityExtension sources"
+      source_phase.add_file_reference(ref, true)
     end
   end
 
-
-  # Force the exact three widget files with bare paths (top-level LiveActivity/)
+  # Final force pass for the three widget files
   %w[LiveActivity.swift LiveActivityBundle.swift LiveActivity+Helper.swift].each do |fname|
     ref = project.files.find { |f| f.path && f.path.to_s.end_with?(fname) }
-    if ref.nil?
-      # try to create from top-level
-      if File.exist?("LiveActivity/#{fname}")
-        puts "  Creating missing ref for #{fname}"
-        ref = project.new_file("LiveActivity/#{fname}")
-      end
+    if ref.nil? && File.exist?("LiveActivity/#{fname}")
+      ref = project.new_file("LiveActivity/#{fname}")
     end
     if ref && source_phase
-      # remove any existing to avoid dups then add
       source_phase.files.select { |bf| bf.file_ref == ref }.each { |bf| source_phase.remove_file_reference(ref) rescue nil }
       has_it = source_phase.files.any? { |bf| bf.file_ref == ref }
       unless has_it
@@ -617,20 +598,11 @@ if live_target
       end
     end
   end
-
 else
   puts "WARNING: live_target not found in strong cleanup"
 end
 
-# ============================================================
 
-# ============================================================
-# 2.7 Fix LiveActivity group path for extension (the one owning "Views")
-#     The extension uses fileSystemSynchronizedGroups for "Views" under a
-#     "LiveActivity" PBXGroup. If that group is nested under Sources/Services
-#     in the tree, resolved paths become wrong. Force its path to "LiveActivity"
-#     (root-relative) so the widget files resolve correctly from ./LiveActivity/.
-# ============================================================
 puts "Fixing LiveActivity group path for extension Views..."
 # Find the group that contains the Views synchronized group (the extension's LiveActivity parent)
 views_group_id = "DDCEBF412CC1B42500DF4C36"
@@ -1047,6 +1019,48 @@ end
 # ============================================================
 rescue => e
   puts "  2.8/2.9 gem section error (non-fatal): #{e.message[0..120]}"
+end
+
+
+
+# Late pass: ensure no directory LiveActivity ref remains in the extension
+live_target2 = project.targets.find { |t| t.name.to_s.downcase.include?("liveactivity") }
+if live_target2
+  sp = live_target2.source_build_phase
+  if sp
+    sp.files.each do |bf|
+      next unless bf.file_ref
+      p = (bf.file_ref.path || bf.file_ref.name || "").to_s
+      if p == "LiveActivity" || p.end_with?("/LiveActivity")
+        puts "  LATE-REMOVE: directory LiveActivity ref from extension sources"
+        sp.remove_file_reference(bf.file_ref) rescue nil
+      end
+    end
+  end
+end
+
+
+# === VERY LATE RAW HAMMER: nuke any remaining directory LiveActivity refs in extension context ===
+begin
+  pbx_late = if ENV["GITHUB_WORKSPACE"]
+    File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj", "project.pbxproj")
+  else
+    "Trio.xcodeproj/project.pbxproj"
+  end
+  if File.exist?(pbx_late)
+    r = File.read(pbx_late)
+    o = r.dup
+    # Remove BuildFile + reference to the known directory LiveActivity for the extension
+    r.gsub!(/\t\tDDCEBF5B2CC1B76400DF4C36 \/\* LiveActivity in Sources \*\/,\n/, "")
+    r.gsub!(/\t\tBDF34F932C10D0E100D51995 \/\* LiveActivity in Sources \*\/,\n/, "")
+    r.gsub!(/\t\t\t\tDDCEBF5B2CC1B76400DF4C36 \/\* LiveActivity in Sources \*\/,\n/, "")
+    if r != o
+      File.write(pbx_late, r)
+      puts "  VERY-LATE-RAW: removed directory LiveActivity refs from sources"
+    end
+  end
+rescue => e
+  puts "  VERY-LATE-RAW error: #{e.message[0..80]}"
 end
 
 puts "2.9 Final ultra-late LiveActivity path/re-parent/strip..."
