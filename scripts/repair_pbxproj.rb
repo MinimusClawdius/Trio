@@ -844,3 +844,66 @@ if corrected > 0
 end
 
 puts "Repair script completed successfully with validation."
+
+# ============================================================
+# 10. Add any missing Pebble integration files.
+#     The Pebble code lives on disk under Trio/Sources/Services/Pebble*
+#     and Trio/Sources/Modules/Settings/View/*Pebble*.swift but was
+#     never added to the pbxproj (common after private-fork merges).
+#     This ensures they get FileReferences + added to the Trio target
+#     sources phase.
+# ============================================================
+puts "Checking for missing Pebble source files..."
+
+pebble_dirs = [
+  "Trio/Sources/Services/PebbleManager",
+  "Trio/Sources/Services/PebbleService",
+  "Trio/Sources/Modules/Settings/View"
+]
+
+added = 0
+
+# Find main target (usually 'Trio')
+main_target = project.targets.find { |t| t.name == "Trio" } || project.targets.first
+sources_phase = main_target.source_build_phase
+
+# Helper to find or create a group by path segments
+def find_or_create_group(project, base_group, path_segments)
+  current = base_group
+  path_segments.each do |seg|
+    child = current.children.find { |c| c.is_a?(Xcodeproj::Project::Object::PBXGroup) && (c.path == seg || c.name == seg) }
+    if child.nil?
+      child = current.new_group(seg, seg)
+      puts "  Created group: #{seg}"
+    end
+    current = child
+  end
+  current
+end
+
+pebble_dirs.each do |dir|
+  next unless Dir.exist?(dir)
+  Dir.glob(File.join(dir, "*.swift")).each do |full_path|
+    relative = full_path.sub(/^Trio\//, "")  # e.g. Sources/Services/PebbleManager/...
+    # Check if already in project
+    existing = project.files.find { |f| f.path && (f.path == "Trio/#{relative}" || f.path == relative) }
+    next if existing
+
+    # Determine group path
+    segments = relative.split("/")[0..-2]  # everything but filename
+    group = find_or_create_group(project, project.main_group, segments)
+
+    file_ref = group.new_file("Trio/#{relative}")
+    sources_phase.add_file_reference(file_ref)
+
+    puts "  Added missing Pebble file: Trio/#{relative}"
+    added += 1
+  end
+end
+
+if added > 0
+  puts "Added #{added} missing Pebble file(s) to the project."
+  project.save
+else
+  puts "No missing Pebble files to add (or already present in pbxproj)."
+end
