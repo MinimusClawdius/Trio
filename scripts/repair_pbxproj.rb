@@ -98,6 +98,36 @@ if File.exist?(pbx_file)
     end
   end
 
+
+  # Extra aggressive patterns for observed jam forms (different whitespace)
+  if raw =~ /WatchManager \*\//m && raw =~ /path = "Trio\/Sources\/Services";/
+    # Try several whitespace variants
+    variants = [
+      [/(,\s*\n)(\s*path = "Trio\/Sources\/Services";\s*\n\s*sourceTree = "<group>";)/m, "\\1\t\t\t);\n\\2"],
+      [/(,\s*\n)(\t+path = "Trio\/Sources\/Services";)/m, "\\1\t\t\t);\n\t\t\t\\2"],
+      [/(,\s*\n)(\s*path = "Trio\/Sources\/Services";)/m, "\\1\t\t\t);\n\t\t\t\\2"],
+    ]
+    variants.each do |pat, repl|
+      new_raw = raw.gsub(pat, repl)
+      if new_raw != raw
+        raw = new_raw
+        fixed = true
+        puts "Applied extra aggressive Services jam fix (variant)"
+        break
+      end
+    end
+  end
+
+  # Very loose: after any child comma + newline + path=Services line, insert close before path
+  if raw =~ /,\s*\n\s*path = "Trio\/Sources\/Services";/
+    new_raw = raw.gsub(/(,\s*\n)(\s*path = "Trio\/Sources\/Services";)/, "\\1\t\t\t);\n\\2")
+    if new_raw != raw
+      raw = new_raw
+      fixed = true
+      puts "Applied loose Services jam close"
+    end
+  end
+
   if fixed && raw.size != original_size
     File.write(pbx_file, raw)
     puts "Wrote pre-fixed project.pbxproj (size #{raw.size} from #{original_size})"
@@ -1290,3 +1320,105 @@ if corrected > 0
 end
 
 puts "Repair script completed successfully with validation."
+
+# ============================================================
+# FINAL-HAMMER (always runs at end): force clean LiveActivity group path in raw pbxproj
+# This is the last thing before the script exits. It directly edits the .pbxproj text
+# that Fastlane and Xcodebuild will read.
+# ============================================================
+puts "FINAL-HAMMER: forcing clean LiveActivity paths in raw pbxproj..."
+
+pbx_path = if ENV["GITHUB_WORKSPACE"]
+  File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj", "project.pbxproj")
+else
+  "Trio.xcodeproj/project.pbxproj"
+end
+
+if File.exist?(pbx_path)
+  raw = File.read(pbx_path)
+  orig = raw.dup
+
+  # Force the known extension group to clean path
+  raw.gsub!(/(6B1A8D1C2B14D91600E76752 \/\* LiveActivity \*\/ = \{)([^}]*?)(path = "[^"]*";)/m, '\1\2path = "LiveActivity";')
+
+  # Universal strip for any LiveActivity group path
+  raw.gsub!(/path = "[^"]*LiveActivity[^"]*";/, 'path = "LiveActivity";')
+
+  # Clean widget file refs to simple names
+  raw.gsub!(/path = "[^"]*\/(LiveActivity\.swift|LiveActivityBundle\.swift|LiveActivity\+Helper\.swift)";/, 'path = "\1";')
+  raw.gsub!(/path = "[^"]*(LiveActivity\.swift|LiveActivityBundle\.swift|LiveActivity\+Helper\.swift)";/, 'path = "\1";')
+
+  # Fix typo spelling in refs if present
+  raw.gsub!(/LiveActitiyAttributes/, 'LiveActivityAttributes')
+
+  # Remove any insane stacked Trio/Sources/.../LiveActivity
+  raw.gsub!(%r{path = "Trio/Sources(/Trio/Sources)?(/Services)?(/Trio/Sources/Services)?/LiveActivity";}, 'path = "LiveActivity";')
+  raw.gsub!(%r{path = "Trio/Sources/Services/LiveActivity";}, 'path = "LiveActivity";')
+
+  if raw != orig
+    File.write(pbx_path, raw)
+    puts "FINAL-HAMMER: applied raw fixes for LiveActivity group and files"
+  else
+    puts "FINAL-HAMMER: no matching bad patterns found this pass"
+  end
+else
+  puts "FINAL-HAMMER: pbx_path not found"
+end
+
+puts "FINAL-HAMMER complete. Repair script finished."
+
+# ============================================================
+# LATE-SERVICES-JAM-HAMMER (runs at very end, after all other saves)
+# Force-repair the Services group children array jam in raw text.
+# This is the last chance before Fastlane sees the file.
+# ============================================================
+puts "LATE-SERVICES-JAM-HAMMER: repairing any remaining Services group jam..."
+
+pbx_path = if ENV["GITHUB_WORKSPACE"]
+  File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj", "project.pbxproj")
+else
+  "Trio.xcodeproj/project.pbxproj"
+end
+
+if File.exist?(pbx_path)
+  raw = File.read(pbx_path)
+  orig = raw.dup
+
+  # Pattern seen in failure: WatchManager line, then stray path=Services line
+  # Insert ");" to close the children array
+
+  # Variant 1: after WatchManager line ending comma
+  raw.gsub!(/(WatchManager \*\/,\s*\n)(\s*path = "Trio\/Sources\/Services";)/, "\\1\t\t\t);\\n\\2")
+
+  # General: any child line comma + newline + indented path=Services
+  raw.gsub!(/(,\s*\n)(\s*path = "Trio\/Sources\/Services";)/, "\\1\t\t\t);\\n\\2")
+
+  # Clean any remaining bare path=Services inside what should be children
+  # (as last resort, move it or comment, but prefer close)
+  if raw =~ /,\s*\n\s*path = "Trio\/Sources\/Services";\s*\n\s*sourceTree/
+    raw.gsub!(/(,\s*\n)(\s*path = "Trio\/Sources\/Services";\s*\n\s*sourceTree = "<group>";)/, "\\1\t\t\t);\\n\\2")
+  end
+
+  if raw != orig
+    File.write(pbx_path, raw)
+    puts "LATE-SERVICES-JAM-HAMMER: inserted closing for Services children jam"
+  else
+    puts "LATE-SERVICES-JAM-HAMMER: no Services jam pattern matched"
+  end
+else
+  puts "LATE-SERVICES-JAM-HAMMER: pbx not found"
+end
+
+# Also re-apply LiveActivity clean as absolute last step
+if File.exist?(pbx_path)
+  raw = File.read(pbx_path)
+  orig = raw.dup
+  raw.gsub!(/path = "[^"]*Services\/LiveActivity[^"]*";/, 'path = "LiveActivity";')
+  raw.gsub!(/path = "[^"]*Trio\/[^"]*LiveActivity[^"]*";/, 'path = "LiveActivity";')
+  if raw != orig
+    File.write(pbx_path, raw)
+    puts "LATE-SERVICES-JAM-HAMMER: also cleaned remaining LiveActivity paths"
+  end
+end
+
+puts "LATE-SERVICES-JAM-HAMMER complete."
