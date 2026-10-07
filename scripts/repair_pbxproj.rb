@@ -76,26 +76,43 @@ if File.exist?(pbx_file)
     puts "No Services jam detected in raw pre-fix pass (or already clean)"
   end
 
-  # Additional cleanup: remove orphaned trailing group fragments
-  # These appear as bare
-  # 			children = (
-  # 			);
-  # 			sourceTree = "<group>";
-  # 		};
-  # blocks right before "/* End PBXGroup section */"
-  # Caused by previous bad merges/Pebble scripts.
+  # Strong orphan removal for bare children fragments left by bad merges
+  # These are the repeating
+  #     children = (
+  #     );
+  #     sourceTree = "<group>";
+  #   };
+  # blocks that break Nanaimo parsing right before End PBXGroup.
   end_marker = "/* End PBXGroup section */"
   if raw.include?(end_marker)
     before, after = raw.split(end_marker, 2)
-    orphan_pattern = /(\n\t\t\tchildren = \(\n\t\t\t\);\n\t\t\tsourceTree = "<group>";\n\t\t\};\n)+/
-    cleaned_before = before.gsub(orphan_pattern, "\n")
-    if cleaned_before != before
-      raw = cleaned_before + end_marker + after
-      fixed = true
-      puts "Removed trailing orphaned group fragments before End PBXGroup"
-      File.write(pbx_file, raw)
-      puts "Wrote pbx with orphan cleanup"
+
+    # Flexible regex (handles tabs, spaces, slight variations)
+    flexible = /(?:\n[ 	]*children = \([ 	]*\n[ 	]*\);[ 	]*\n[ 	]*sourceTree = "<group>";[ 	]*\n[ 	]*\};[ 	]*)+/m
+    cleaned = before.gsub(flexible, "\n")
+
+    # Line-scanner safety net for any remaining
+    lines = cleaned.split("\n")
+    out = []
+    i = 0
+    while i < lines.size
+      if lines[i].strip == "children = (" && i + 3 < lines.size
+        blk = lines[i..i+3].join("\n")
+        if blk.include?(");") && blk.include?("sourceTree") && blk.include?("};")
+          prev = i > 0 ? lines[i-1] : ""
+          unless prev =~ /isa = PBXGroup| = \{/
+            i += 4
+            next
+          end
+        end
+      end
+      out << lines[i]
+      i += 1
     end
+    before = out.join("\n")
+
+    raw = before + end_marker + after
+    puts "Applied strong orphan cleanup (pre-load + flexible + scanner)"
   end
 else
   puts "WARNING: Could not find pbxproj for pre-fix at #{pbx_file}"
@@ -488,6 +505,36 @@ unless File.exist?(pbx_path)
   pbx_path = File.join(project_path, "project.pbxproj") if Dir.exist?(project_path)
 end
 
+# Final aggressive orphan strip right before validation/Fastlane sees the file
+if File.exist?(pbx_path)
+  raw_final = File.read(pbx_path)
+  end_m = "/* End PBXGroup section */"
+  if raw_final.include?(end_m)
+    b, a = raw_final.split(end_m, 2)
+    b = b.gsub(/(?:\n[ \t]*children = \([ \t]*\n[ \t]*\);[ \t]*\n[ \t]*sourceTree = "<group>";[ \t]*\n[ \t]*\};[ \t]*)+/m, "\n")
+    # line scanner
+    ls = b.split("\n")
+    o = []
+    ii = 0
+    while ii < ls.size
+      if ls[ii].strip == "children = (" && ii+3 < ls.size
+        bl = ls[ii..ii+3].join("\n")
+        if bl.include?(");") && bl.include?("sourceTree") && bl.include?("};")
+          pr = ii > 0 ? ls[ii-1] : ""
+          unless pr =~ /isa = PBXGroup| = \{/
+            ii += 4; next
+          end
+        end
+      end
+      o << ls[ii]
+      ii += 1
+    end
+    raw_final = o.join("\n") + end_m + a
+    File.write(pbx_path, raw_final)
+    puts "Final orphan strip applied before validation"
+  end
+end
+
 if File.exist?(pbx_path)
   raw = File.read(pbx_path)
   found_bad = false
@@ -524,6 +571,16 @@ if File.exist?(pbx_path)
   if !found_bad && (raw =~ /BEA75ECA|51C9D754/)
     found_bad = true
     puts "!!! Found specific old bad Pebble GID in raw pbxproj"
+  end
+
+  # Explicit check for the trailing orphan fragments that kill the Nanaimo parser
+  orphan_count = raw.scan(/children = \(\s*\);\s*sourceTree = "<group>";\s*\};/).size
+  if orphan_count > 0
+    found_bad = true
+    puts "!!! Found #{orphan_count} bare/orphaned group fragments (the exact cause of 'additional characters' parse error)"
+    # Show a bit of context around the first one
+    idx = raw.index("children = (")
+    context = raw[[idx-80,0].max .. [idx+120, raw.size].min] rescue nil if idx
   end
 
   # Very rough check for suspicious consecutive group-like objects without comma
