@@ -2608,24 +2608,10 @@
 			isa = PBXGroup;
 			children = (
 				3811DE9325C9D88200A708ED /* AppearanceManager.swift */,
-			);
-			path = Appearance;
-			sourceTree = "<group>";
-		};
-		3811DE9425C9D88200A708ED /* Network */ = {
-			isa = PBXGroup;
-			children = (
-				38E44521274E3DDC00EC9A94 /* NetworkReachabilityManager.swift */,
-				38192E03261B82FA0094D973 /* ReachabilityManager.swift */,
-				3811DE9625C9D88300A708ED /* HTTPResponseStatus.swift */,
-				DDC9B9962CFD2332003E7721 /* Nightscout */,
-				38FE826925CC82DB001FF17A /* NetworkService.swift */,
-				CE1F6DDA2BAE08B60064EB8D /* TidepoolManager.swift */,
-				CD1235C000000000000000F3 /* TidepoolUploadSerializer.swift */,
-			);
-			path = Network;
-			sourceTree = "<group>";
-		};
+		);
+		path = Appearance;
+		sourceTree = "<group>";
+	};
 		3811DE9825C9D88300A708ED /* Storage */ = {
 			isa = PBXGroup;
 			children = (
