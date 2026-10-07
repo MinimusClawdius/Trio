@@ -294,7 +294,9 @@ puts "Removed #{removed} broken BuildFile(s)."
 # ============================================================
 
 live_group = project.main_group.recursive_children_groups.find do |g|
-  (g.path && g.path == "LiveActivity") || (g.name && g.name == "LiveActivity")
+    path = (g.path || "").to_s
+    name = (g.name || "").to_s
+    (path == "LiveActivity" || path.end_with?("/LiveActivity") || name == "LiveActivity")
 end
 
 if live_group
@@ -375,7 +377,9 @@ else
   puts "Performing clean Pebble integration (remove stale + fresh add)..."
 
   services_group = project.main_group.recursive_children_groups.find do |g|
-    (g.path && g.path == "Services") || (g.name && g.name == "Services")
+    path = (g.path || "").to_s
+    name = (g.name || "").to_s
+    path == "Services" || path.end_with?("/Services") || path == "Trio/Sources/Services" || name == "Services"
   end
 
   if services_group.nil?
