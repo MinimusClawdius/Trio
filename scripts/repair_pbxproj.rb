@@ -75,6 +75,28 @@ if File.exist?(pbx_file)
   else
     puts "No Services jam detected in raw pre-fix pass (or already clean)"
   end
+
+  # Additional cleanup: remove orphaned trailing group fragments
+  # These appear as bare
+  # 			children = (
+  # 			);
+  # 			sourceTree = "<group>";
+  # 		};
+  # blocks right before "/* End PBXGroup section */"
+  # Caused by previous bad merges/Pebble scripts.
+  end_marker = "/* End PBXGroup section */"
+  if raw.include?(end_marker)
+    before, after = raw.split(end_marker, 2)
+    orphan_pattern = /(\n\t\t\tchildren = \(\n\t\t\t\);\n\t\t\tsourceTree = "<group>";\n\t\t\};\n)+/
+    cleaned_before = before.gsub(orphan_pattern, "\n")
+    if cleaned_before != before
+      raw = cleaned_before + end_marker + after
+      fixed = true
+      puts "Removed trailing orphaned group fragments before End PBXGroup"
+      File.write(pbx_file, raw)
+      puts "Wrote pbx with orphan cleanup"
+    end
+  end
 else
   puts "WARNING: Could not find pbxproj for pre-fix at #{pbx_file}"
 end
@@ -528,6 +550,24 @@ if File.exist?(pbx_path)
     end
   else
     puts "Post-save validation PASSED: no obvious corruption patterns detected."
+  # Extra post-clean check for trailing orphans (the bare children blocks seen in run 37611252270)
+  if File.exist?(pbx_path)
+    raw2 = File.read(pbx_path)
+    orphan_count = raw2.scan(/\t\t\tchildren = \(\n\t\t\t\);\n\t\t\tsourceTree = "<group>";\n\t\t\};/).size
+    if orphan_count > 0
+      puts "!!! Still found #{orphan_count} trailing orphaned group fragment(s)"
+      end_m = "/* End PBXGroup section */"
+      if raw2.include?(end_m)
+        b, a = raw2.split(end_m, 2)
+        b2 = b.gsub(/(\n\t\t\tchildren = \(\n\t\t\t\);\n\t\t\tsourceTree = "<group>";\n\t\t\};\n)+/, "\n")
+        if b2 != b
+          File.write(pbx_path, b2 + end_m + a)
+          puts "Last-chance orphan strip applied to pbxproj"
+        end
+      end
+    end
+  end
+
   end
 else
   puts "WARNING: Could not locate project.pbxproj for validation"
