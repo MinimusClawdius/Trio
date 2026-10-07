@@ -325,7 +325,27 @@ puts "Removed #{removed} broken BuildFile(s)."
 live_group = project.main_group.recursive_children_groups.find do |g|
     path = (g.path || "").to_s
     name = (g.name || "").to_s
+    is_live = (path == "LiveActivity" || path.end_with?("/LiveActivity") || name == "LiveActivity")
+    # Prefer the one that is NOT under Services/Trio/Sources/Services (for the extension)
+    if is_live
+      parent_path = ""
+      # crude parent check via string on path
+      if path.include?("Services/LiveActivity") || path.include?("Trio/Sources")
+        next false unless path == "LiveActivity"  # only accept exact "LiveActivity"
+      end
+      true
+    else
+      false
+    end
+end
+
+# Fallback to any LiveActivity if the strict one wasn't found
+if !live_group
+  live_group = project.main_group.recursive_children_groups.find do |g|
+    path = (g.path || "").to_s
+    name = (g.name || "").to_s
     (path == "LiveActivity" || path.end_with?("/LiveActivity") || name == "LiveActivity")
+  end
 end
 
 if live_group
@@ -423,6 +443,73 @@ project.main_group.recursive_children_groups.each do |g|
     puts "  Sanitized group path: #{orig} -> #{newp}"
   end
 end
+end
+
+
+# ============================================================
+# 2.6 Strong LiveActivityExtension source cleanup and re-add
+#     Force correct root-relative paths for the extension files.
+#     Remove typo and any bad refs from the extension target.
+# ============================================================
+puts "Strong LiveActivityExtension cleanup..."
+live_target = project.targets.find do |t|
+  name = t.name.to_s.downcase
+  name.include?("liveactivity")
+end
+
+if live_target
+  puts "Re-cleaning sources for #{live_target.name}"
+  source_phase = live_target.source_build_phase
+
+  # Remove any BuildFile that references the typo or obviously bad LiveActivity files
+  bad_basenames = ["LiveActitiyAttributes.swift"]
+  if source_phase
+    source_phase.files.each do |bf|
+      if bf.file_ref && bf.file_ref.path
+        p = bf.file_ref.path.to_s
+        if bad_basenames.any? { |b| p.end_with?(b) } || p.include?("Trio/Sources/Trio") || p.include?("/Trio/Trio/")
+          puts "  Removing bad ref from extension: #{p}"
+          source_phase.remove_file_reference(bf.file_ref) rescue nil
+        end
+      end
+    end
+  end
+
+  # Ensure the core extension files are present with clean paths
+  core_live_files = [
+    "LiveActivity/LiveActivity.swift",
+    "LiveActivity/LiveActivityBundle.swift",
+    "LiveActivity/LiveActivity+Helper.swift"
+  ]
+
+  core_live_files.each do |rel|
+    next unless File.exist?(rel)
+    basename = File.basename(rel)
+
+    # Find or create clean ref
+    ref = project.files.find { |f| f.path && (f.path == basename || f.path.end_with?("/#{basename}")) }
+    if ref
+      # Force clean path
+      if ref.path.to_s != basename && !ref.path.to_s.start_with?("LiveActivity/")
+        puts "  Forcing clean path on #{basename}: was #{ref.path}"
+        ref.path = basename
+      end
+    else
+      puts "  Creating fresh clean ref for #{rel}"
+      ref = project.new_file(rel)
+    end
+
+    # Add to extension sources if not present
+    if source_phase
+      has_it = source_phase.files.any? { |bf| bf.file_ref == ref }
+      unless has_it
+        puts "  Adding clean #{basename} to LiveActivityExtension sources"
+        source_phase.add_file_reference(ref, true)
+      end
+    end
+  end
+else
+  puts "WARNING: live_target not found in strong cleanup"
 end
 
 # ============================================================
