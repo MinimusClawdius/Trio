@@ -1493,8 +1493,8 @@
 		6B1A8D1F2B14D91600E76752 /* LiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivity.swift; sourceTree = "<group>"; };
 		6B1A8D232B14D91700E76752 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6B1A8D252B14D91700E76752 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		6B1A8D2D2B156EEF00E76752 /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Trio/Sources/Services/LiveActivity/LiveActivityManager.swift"; sourceTree = "<group>"; };
-		6BCF84DC2B16843A003AD46E /* LiveActitiyAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Trio/Sources/Services/LiveActivity/LiveActitiyAttributes.swift"; sourceTree = "<group>"; };
+		6B1A8D2D2B156EEF00E76752 /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityManager.swift; sourceTree = "<group>"; };
+		6BCF84DC2B16843A003AD46E /* LiveActitiyAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActitiyAttributes.swift; sourceTree = "<group>"; };
 		71D44AAA2CA5F5EA0036EE9E /* AlertPermissionsChecker.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AlertPermissionsChecker.swift; sourceTree = "<group>"; };
 		79BDA519C9B890FD9A5DFCF3 /* ISFEditorDataFlow.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ISFEditorDataFlow.swift; sourceTree = "<group>"; };
 		7E22146D3DF4853786C78132 /* CarbRatioEditorDataFlow.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CarbRatioEditorDataFlow.swift; sourceTree = "<group>"; };
@@ -1720,7 +1720,7 @@
 		BDF34F822C10C5B600D51995 /* DataManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataManager.swift; sourceTree = "<group>"; };
 		BDF34F842C10C62E00D51995 /* GlucoseData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlucoseData.swift; sourceTree = "<group>"; };
 		BDF34F8F2C10CF8C00D51995 /* CoreDataStack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataStack.swift; sourceTree = "<group>"; };
-		BDF34F922C10D0E100D51995 /* LiveActivityAttributes+Helper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Trio/Sources/Services/LiveActivity/LiveActivityAttributes+Helper.swift"; sourceTree = "<group>"; };
+		BDF34F922C10D0E100D51995 /* LiveActivityAttributes+Helper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveActivityAttributes+Helper.swift"; sourceTree = "<group>"; };
 		BDF34F942C10D27300D51995 /* DeterminationData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeterminationData.swift; sourceTree = "<group>"; };
 		BDF530D72B40F8AC002CAF43 /* LockScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LockScreenView.swift; sourceTree = "<group>"; };
 		BDFD16592AE40438007F0DDA /* TreatmentsRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TreatmentsRootView.swift; sourceTree = "<group>"; };
@@ -2601,7 +2601,7 @@
 				3811DEA525C9D88300A708ED /* UnlockManager */,
 				38E87406274F9AA500975559 /* UserNotifications */,
 				38E8754D275556E100975559 /* WatchManager */,
-			path = Services;
+			path = "Trio/Sources/Services";
 			sourceTree = "<group>";
 		};
 		3811DE9225C9D88200A708ED /* Appearance */ = {
@@ -3531,7 +3531,7 @@
 				6B1A8D252B14D91700E76752 /* Info.plist */,
 				DDCEBF5A2CC1B76400DF4C36 /* LiveActivity+Helper.swift */,
 			);
-			path = LiveActivity;
+			path = "Trio/Sources/Services/LiveActivity";
 			sourceTree = "<group>";
 		};
 		6B1A8D2C2B156EC100E76752 /* LiveActivity */ = {
@@ -3542,7 +3542,7 @@
 				BDF34F922C10D0E100D51995 /* LiveActivityAttributes+Helper.swift */,
 				BDF34F882C10C65E00D51995 /* Data */,
 			);
-			path = LiveActivity;
+			path = "Trio/Sources/Services/LiveActivity";
 			sourceTree = "<group>";
 		};
 		99C01B871ACAB3F32CE755C7 /* PumpConfig */ = {
@@ -4368,7 +4368,7 @@
 				DD4C57A92D73B3D9001BFF2C /* RestartLiveActivityIntentRequest.swift */,
 				DD4C57A72D73ADEA001BFF2C /* RestartLiveActivityIntent.swift */,
 			);
-			path = LiveActivity;
+			path = "Trio/Sources/Services/LiveActivity";
 			sourceTree = "<group>";
 		};
 		DD5DC9EF2CF3D95400AB8703 /* AdjustmentsStateModel+Extensions */ = {
