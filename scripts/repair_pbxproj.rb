@@ -131,7 +131,45 @@ else
   puts "WARNING: Could not find pbxproj for pre-fix at #{pbx_file}"
 end
 
-project = Xcodeproj::Project.open(project_path)
+# Try to open, with one last aggressive orphan strip + retry if it fails
+begin
+  project = Xcodeproj::Project.open(project_path)
+rescue => e
+  puts "Initial open failed: #{e.class} - #{e.message[0..200]}"
+  puts "Attempting one more aggressive orphan strip and retry open..."
+
+  if File.exist?(pbx_file)
+    raw_retry = File.read(pbx_file)
+    end_m = "/* End PBXGroup section */"
+    if raw_retry.include?(end_m)
+      b, a = raw_retry.split(end_m, 2)
+      lines = b.split("\n")
+      out = []
+      i = 0
+      while i < lines.size
+        if lines[i].strip == "children = (" && i + 3 < lines.size
+          l1 = lines[i+1].strip
+          l2 = lines[i+2].strip
+          l3 = lines[i+3].strip
+          if l1 == ");" && l2.start_with?('sourceTree = "<group>"') && l3 == "};"
+            prev = i > 0 ? lines[i-1].strip : ""
+            unless prev.end_with?("= {") || prev.include?("isa = PBXGroup")
+              i += 4
+              next
+            end
+          end
+        end
+        out << lines[i]
+        i += 1
+      end
+      File.write(pbx_file, out.join("\n") + end_m + a)
+      puts "Extra aggressive strip written for retry"
+    end
+  end
+
+  project = Xcodeproj::Project.open(project_path)
+  puts "Retry open succeeded after extra strip"
+end
 
 # ============================================================
 # Build set of FileRef UUIDs that are properly children of some group
