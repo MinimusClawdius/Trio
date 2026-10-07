@@ -1291,7 +1291,27 @@ if File.exist?(pbx_path)
   # Remove duplicate LiveActitiyAttributes entries if present in build phase (simple)
   # (more sophisticated would be needed for exact PBXBuildFile dedup)
 
-  if raw != o
+  
+  # === AGGRESSIVE RAW REMOVAL of LiveActivityAttributes from LiveActivityExtension ===
+  # Remove the specific bad BuildFile definitions (the ones that pull the main-app Attributes into the extension)
+  raw.gsub!(/^\t\t6BCF84DD2B16843A003AD46E \/\* LiveActivityAttributes\.swift in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* LiveActivityAttributes\.swift \*\/; \};\s*$/, '')
+  raw.gsub!(/^\t\t6BCF84DE2B16843A003AD46E \/\* LiveActivityAttributes\.swift in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* LiveActivityAttributes\.swift \*\/; \};\s*$/, '')
+
+  # Remove the references from any files = ( ... ) lists
+  raw.gsub!(/^\t\t\t\t6BCF84DD2B16843A003AD46E \/\* LiveActivityAttributes\.swift in Sources \*\/,\s*$/, '')
+  raw.gsub!(/^\t\t\t\t6BCF84DE2B16843A003AD46E \/\* LiveActivityAttributes\.swift in Sources \*\/,\s*$/, '')
+
+  # Also catch without the trailing comma in some lists
+  raw.gsub!(/^\t\t\t\t6BCF84DD2B16843A003AD46E \/\* LiveActivityAttributes\.swift in Sources \*\/\s*$/, '')
+  raw.gsub!(/^\t\t\t\t6BCF84DE2B16843A003AD46E \/\* LiveActivityAttributes\.swift in Sources \*\/\s*$/, '')
+
+  # Nuke any remaining reference to these UUIDs in a Sources context
+  raw.gsub!(/6BCF84DD2B16843A003AD46E \/\* LiveActivityAttributes\.swift in Sources \*\//, '')
+  raw.gsub!(/6BCF84DE2B16843A003AD46E \/\* LiveActivityAttributes\.swift in Sources \*\//, '')
+
+  puts "TOP-RAW: aggressive removal of LiveActivityAttributes BuildFiles from extension sources"
+
+if raw != o
     File.write(pbx_path, raw)
     puts "FINAL-HAMMER: applied last-chance fixes"
   else
@@ -1320,5 +1340,38 @@ if File.exist?(pbx)
   if raw != o
     File.write(pbx, raw)
     puts "EXTRA-RAW: removed Attributes BuildFile entries from extension phase"
+  end
+end
+
+# ============================================================
+# LAST-CHANCE RAW NUKE for the specific bad Attributes entries (UUIDs from the broken pbxproj)
+# ============================================================
+puts "LAST-CHANCE-RAW-NUKE: ensuring LiveActivityAttributes BuildFiles are gone from extension..."
+pbx = if ENV["GITHUB_WORKSPACE"]
+  File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj", "project.pbxproj")
+else
+  "Trio.xcodeproj/project.pbxproj"
+end
+if File.exist?(pbx)
+  raw = File.read(pbx)
+  o = raw.dup
+
+  # Exact bad BuildFile defs
+  raw.gsub!(/^\t\t6BCF84DD2B16843A003AD46E \/\* LiveActivityAttributes\.swift in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* LiveActivityAttributes\.swift \*\/; \};\s*$/, '')
+  raw.gsub!(/^\t\t6BCF84DE2B16843A003AD46E \/\* LiveActivityAttributes\.swift in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* LiveActivityAttributes\.swift \*\/; \};\s*$/, '')
+
+  # In files lists (with or without comma)
+  raw.gsub!(/^\t\t\t\t6BCF84DD2B16843A003AD46E \/\* LiveActivityAttributes\.swift in Sources \*\/,?\s*$/, '')
+  raw.gsub!(/^\t\t\t\t6BCF84DE2B16843A003AD46E \/\* LiveActivityAttributes\.swift in Sources \*\/,?\s*$/, '')
+
+  # Any remaining UUID references in Sources context
+  raw.gsub!(/6BCF84DD2B16843A003AD46E \/\* LiveActivityAttributes\.swift in Sources \*\//, '')
+  raw.gsub!(/6BCF84DE2B16843A003AD46E \/\* LiveActivityAttributes\.swift in Sources \*\//, '')
+
+  if raw != o
+    File.write(pbx, raw)
+    puts "LAST-CHANCE-RAW-NUKE: removed bad Attributes entries"
+  else
+    puts "LAST-CHANCE-RAW-NUKE: no change (already clean or pattern missed)"
   end
 end
