@@ -563,6 +563,81 @@ else
   puts "  WARNING: Could not find the LiveActivity group owning Views"
 end
 
+
+# ============================================================
+# 2.8 Aggressive re-parent + path fix for LiveActivity extension group
+#     The group 6B1A8D1C... (owner of Views + widget files) has path
+#     "Trio/Sources/Services/LiveActivity" because it is nested under
+#     a Services parent. This causes the build to look in the wrong place.
+#     We must:
+#       - Force path = "LiveActivity"
+#       - Re-parent it directly under main_group (or the top "Trio" group)
+#         so it is not relative to Sources/Services.
+# ============================================================
+puts "Aggressive LiveActivity extension group re-parent and path fix..."
+
+# Find the problematic LiveActivity group: the one owning Views or having the widget files as children
+target_group = nil
+project.main_group.recursive_children_groups.each do |g|
+  path = (g.path || "").to_s
+  name = (g.name || "").to_s
+  has_views = g.children.any? { |c| (c.name || "").to_s == "Views" || (c.uuid || "") == "DDCEBF412CC1B42500DF4C36" }
+  has_widget_files = g.children.any? { |c| 
+    p = (c.path || c.name || "").to_s
+    p.end_with?("LiveActivity.swift") || p.end_with?("LiveActivityBundle.swift") || p.end_with?("LiveActivity+Helper.swift")
+  }
+  if (name == "LiveActivity" || path.end_with?("LiveActivity")) && (has_views || has_widget_files)
+    target_group = g
+    puts "  Found target LiveActivity group: name=#{name}, path=#{path}, has_views=#{has_views}, has_widget=#{has_widget_files}"
+    break
+  end
+end
+
+if target_group
+  orig_path = target_group.path.to_s
+  target_group.path = "LiveActivity"
+  puts "  Forced path: #{orig_path} -> LiveActivity"
+
+  # Find current parent and re-parent to main_group level if necessary
+  # The main_group or a top-level "Trio" group
+  root_parent = project.main_group
+  # Try to find a "Trio" group at top level if it exists
+  trio_group = project.main_group.children.find { |c| (c.name || "").to_s == "Trio" && c.is_a?(Xcodeproj::Project::Object::PBXGroup) }
+  root_parent = trio_group if trio_group
+
+  # Check if already directly under root_parent
+  already_direct = root_parent.children.include?(target_group)
+
+  if !already_direct
+    # Remove from any current parent
+    project.main_group.recursive_children_groups.each do |parent|
+      if parent.children.include?(target_group)
+        parent.children.delete(target_group) rescue nil
+        puts "  Removed from parent group (path: #{parent.path || parent.name})"
+      end
+    end
+    # Add to the root parent
+    root_parent.children << target_group unless root_parent.children.include?(target_group)
+    puts "  Re-parented LiveActivity group directly under #{root_parent.name || 'main_group'}"
+  else
+    puts "  Already directly under root parent"
+  end
+
+  # Clean paths on the widget files inside this group
+  target_group.children.each do |child|
+    if child.is_a?(Xcodeproj::Project::Object::PBXFileReference)
+      p = child.path.to_s
+      if p.include?("Trio/") || p.include?("Sources/Services/LiveActivity")
+        newp = File.basename(p)
+        puts "  Cleaned file path inside group: #{p} -> #{newp}"
+        child.path = newp
+      end
+    end
+  end
+else
+  puts "  WARNING: Could not locate the target LiveActivity group for re-parent"
+end
+
 # 3. Final save
 # ============================================================
 
