@@ -533,6 +533,20 @@ if live_target
       unless has_it
         puts "  Adding clean #{basename} to LiveActivityExtension sources"
         source_phase.add_file_reference(ref, true)
+  # Extra: explicitly drop any LiveActivityAttributes (main app version) from the extension
+  attrs = project.files.select { |f| f.path.to_s.end_with?("LiveActivityAttributes.swift") rescue false }
+  attrs.each do |fr|
+    removed = 0
+    if source_phase
+      before = source_phase.files.size
+      source_phase.files.reject! { |bf| (bf.file_ref == fr) rescue false }
+      removed = before - source_phase.files.size
+    end
+    if removed > 0
+      puts "  High-level pruned LiveActivityAttributes.swift (#{fr.uuid}) from extension (#{removed} entries)"
+    end
+  end
+
       end
     end
   end
