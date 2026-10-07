@@ -145,6 +145,26 @@ else
   puts "WARNING: Could not find pbxproj for pre-fix at #{pbx_file}"
 end
 
+# === TEMPORARY BYPASS: strip time-sensitive notifications entitlement ===
+# The current match AppStore profile does not include this capability.
+# Code uses .timeSensitive alerts; re-enable once profile is updated in dev portal.
+ent_path = if ENV["GITHUB_WORKSPACE"]
+  File.join(ENV["GITHUB_WORKSPACE"], "Trio/Resources/Trio.entitlements")
+else
+  "Trio/Resources/Trio.entitlements"
+end
+if File.exist?(ent_path)
+  ent = File.read(ent_path)
+  if ent.include?("usernotifications.time-sensitive")
+    original_ent = ent.dup
+    ent.gsub!(/\s*<key>com\.apple\.developer\.usernotifications\.time-sensitive<\/key>\s*<true\/>/, "")
+    if ent != original_ent
+      File.write(ent_path, ent)
+      puts "Stripped com.apple.developer.usernotifications.time-sensitive entitlement (profile workaround)"
+    end
+  end
+end
+
 # Try to open, with one last aggressive orphan strip + retry if it fails
 begin
   project = Xcodeproj::Project.open(project_path)
