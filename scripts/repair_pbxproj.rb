@@ -76,43 +76,56 @@ if File.exist?(pbx_file)
     puts "No Services jam detected in raw pre-fix pass (or already clean)"
   end
 
-  # Strong orphan removal for bare children fragments left by bad merges
-  # These are the repeating
-  #     children = (
-  #     );
-  #     sourceTree = "<group>";
-  #   };
-  # blocks that break Nanaimo parsing right before End PBXGroup.
+  # === ROBUST ORPHAN STRIPPER (line-based, very reliable) ===
+  # Removes any sequence of bare "children = ( ... ); sourceTree... };" that is not
+  # inside a proper PBXGroup definition. This is the corruption introduced by
+  # previous Pebble-related merges.
   end_marker = "/* End PBXGroup section */"
   if raw.include?(end_marker)
     before, after = raw.split(end_marker, 2)
 
-    # Flexible regex (handles tabs, spaces, slight variations)
-    flexible = /(?:\n[ 	]*children = \([ 	]*\n[ 	]*\);[ 	]*\n[ 	]*sourceTree = "<group>";[ 	]*\n[ 	]*\};[ 	]*)+/m
-    cleaned = before.gsub(flexible, "\n")
-
-    # Line-scanner safety net for any remaining
-    lines = cleaned.split("\n")
+    lines = before.split("\n")
     out = []
     i = 0
+    removed = 0
     while i < lines.size
-      if lines[i].strip == "children = (" && i + 3 < lines.size
-        blk = lines[i..i+3].join("\n")
-        if blk.include?(");") && blk.include?("sourceTree") && blk.include?("};")
-          prev = i > 0 ? lines[i-1] : ""
-          unless prev =~ /isa = PBXGroup| = \{/
-            i += 4
-            next
+      line = lines[i]
+      stripped = line.strip
+
+      # Detect start of a potential orphan block
+      if stripped == "children = ("
+        # Look ahead for the classic 4-line orphan pattern
+        if i + 3 < lines.size
+          l1 = lines[i+1].strip
+          l2 = lines[i+2].strip
+          l3 = lines[i+3].strip
+          if l1 == ");" && l2.start_with?('sourceTree = "<group>"') && l3 == "};"
+            # Check previous line — if it does not look like end of a real group, skip the block
+            prev = i > 0 ? lines[i-1].strip : ""
+            is_real_group_close = prev.end_with?("= {") || prev.include?("isa = PBXGroup") || prev =~ /\/\* .* \*\/ = \{/
+            if !is_real_group_close
+              # This is an orphan — skip 4 lines
+              removed += 1
+              i += 4
+              next
+            end
           end
         end
       end
-      out << lines[i]
+
+      out << line
       i += 1
     end
-    before = out.join("\n")
 
+    before = out.join("\n")
     raw = before + end_marker + after
-    puts "Applied strong orphan cleanup (pre-load + flexible + scanner)"
+
+    if removed > 0
+      puts "  ROBUST ORPHAN STRIPPER: removed #{removed} orphan group block(s)"
+      File.write(pbx_file, raw)
+    else
+      puts "  ROBUST ORPHAN STRIPPER: no orphans detected by line scanner"
+    end
   end
 else
   puts "WARNING: Could not find pbxproj for pre-fix at #{pbx_file}"
@@ -505,33 +518,43 @@ unless File.exist?(pbx_path)
   pbx_path = File.join(project_path, "project.pbxproj") if Dir.exist?(project_path)
 end
 
-# Final aggressive orphan strip right before validation/Fastlane sees the file
+# Final robust orphan strip right before validation/Fastlane sees the file
 if File.exist?(pbx_path)
   raw_final = File.read(pbx_path)
   end_m = "/* End PBXGroup section */"
   if raw_final.include?(end_m)
     b, a = raw_final.split(end_m, 2)
-    b = b.gsub(/(?:\n[ \t]*children = \([ \t]*\n[ \t]*\);[ \t]*\n[ \t]*sourceTree = "<group>";[ \t]*\n[ \t]*\};[ \t]*)+/m, "\n")
-    # line scanner
-    ls = b.split("\n")
-    o = []
-    ii = 0
-    while ii < ls.size
-      if ls[ii].strip == "children = (" && ii+3 < ls.size
-        bl = ls[ii..ii+3].join("\n")
-        if bl.include?(");") && bl.include?("sourceTree") && bl.include?("};")
-          pr = ii > 0 ? ls[ii-1] : ""
-          unless pr =~ /isa = PBXGroup| = \{/
-            ii += 4; next
+    lines = b.split("\n")
+    out = []
+    i = 0
+    removed = 0
+    while i < lines.size
+      line = lines[i]
+      stripped = line.strip
+      if stripped == "children = ("
+        if i + 3 < lines.size
+          l1 = lines[i+1].strip
+          l2 = lines[i+2].strip
+          l3 = lines[i+3].strip
+          if l1 == ");" && l2.start_with?('sourceTree = "<group>"') && l3 == "};"
+            prev = i > 0 ? lines[i-1].strip : ""
+            is_real = prev.end_with?("= {") || prev.include?("isa = PBXGroup")
+            if !is_real
+              removed += 1
+              i += 4
+              next
+            end
           end
         end
       end
-      o << ls[ii]
-      ii += 1
+      out << line
+      i += 1
     end
-    raw_final = o.join("\n") + end_m + a
-    File.write(pbx_path, raw_final)
-    puts "Final orphan strip applied before validation"
+    raw_final = out.join("\n") + end_m + a
+    if removed > 0
+      File.write(pbx_path, raw_final)
+      puts "  ROBUST FINAL ORPHAN STRIP: removed #{removed} block(s) before validation"
+    end
   end
 end
 
