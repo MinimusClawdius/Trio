@@ -98,6 +98,20 @@ if File.exist?(pbx_file)
     end
   end
 
+  
+  # Early removal of bad Attributes BuildFiles (before any high-level processing)
+  bad_dd = "6BCF84DD2B16843A003AD46E"
+  bad_de = "6BCF84DE2B16843A003AD46E"
+  ["LiveActivityAttributes.swift", "LiveActitiyAttributes.swift"].each do |sp|
+    raw.gsub!(/^\t\t#{bad_dd} \/\* #{sp} in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* #{sp} \*\/; \};\s*$/, "")
+    raw.gsub!(/^\t\t#{bad_de} \/\* #{sp} in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* #{sp} \*\/; \};\s*$/, "")
+    raw.gsub!(/^\t\t\t\t#{bad_dd} \/\* #{sp} in Sources \*\/,?\s*$/, "")
+    raw.gsub!(/^\t\t\t\t#{bad_de} \/\* #{sp} in Sources \*\/,?\s*$/, "")
+    raw.gsub!(/#{bad_dd} \/\* #{sp} in Sources \*\//, "")
+    raw.gsub!(/#{bad_de} \/\* #{sp} in Sources \*\//, "")
+  end
+  puts "EARLY-ATTRIBUTES-NUKE: applied (if any bad entries present)"
+
   if fixed && raw.size != original_size
     File.write(pbx_file, raw)
     puts "Wrote pre-fixed project.pbxproj (size #{raw.size} from #{original_size})"
