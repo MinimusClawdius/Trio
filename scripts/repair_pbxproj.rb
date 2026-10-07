@@ -127,6 +127,20 @@ if File.exist?(pbx_file)
       puts "  ROBUST ORPHAN STRIPPER: no orphans detected by line scanner"
     end
   end
+
+  # Clean duplicate End PBXGroup section markers (can appear from previous bad merges or partial repairs)
+  end_marker = "/* End PBXGroup section */"
+  if raw.count(end_marker) > 1
+    # Keep only the last occurrence before the NativeTarget section
+    parts = raw.split(end_marker)
+    # Rejoin with only one marker at the correct place
+    raw = parts[0] + end_marker + parts[1..-1].join("")
+    # Remove any extra blank lines around it
+    raw.gsub!(/\n\s*\n(#{Regexp.escape(end_marker)})/, "\n\\1")
+    raw.gsub!(/(#{Regexp.escape(end_marker)})\n\s*\n/, "\\1\n\n")
+    File.write(pbx_file, raw)
+    puts "  Cleaned duplicate End PBXGroup section markers"
+  end
 else
   puts "WARNING: Could not find pbxproj for pre-fix at #{pbx_file}"
 end
