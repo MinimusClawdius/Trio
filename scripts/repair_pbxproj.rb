@@ -111,6 +111,30 @@ if File.exist?(pbx_file)
     raw.gsub!(/#{bad_de} \/\* #{sp} in Sources \*\//, "")
   end
   puts "EARLY-ATTRIBUTES-NUKE: applied (if any bad entries present)"
+# === EARLY RAW CLEAN (before any potentially crashing gem traversal) ===
+begin
+  pbx_early = if ENV["GITHUB_WORKSPACE"]
+    File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj", "project.pbxproj")
+  else
+    "Trio.xcodeproj/project.pbxproj"
+  end
+  if File.exist?(pbx_early)
+    r = File.read(pbx_early)
+    o = r.dup
+    r.gsub!(/path = "[^"]*LiveActivity[^"]*";/, 'path = "LiveActivity";')
+    r.gsub!(/path = "Trio\/Sources\/Services\/LiveActivity";/, 'path = "LiveActivity";')
+    r.gsub!(/path = "[^"]*Trio\/[^"]*LiveActivity[^"]*";/, 'path = "LiveActivity";')
+    r.gsub!(/path = "[^"]*Sources\/Services\/LiveActivity[^"]*";/, 'path = "LiveActivity";')
+    r.gsub!(/path = "Trio\/Sources\/Services\/LiveActivity";/, 'path = "LiveActivity";')
+    if r != o
+      File.write(pbx_early, r)
+      puts "  EARLY-RAW: cleaned LiveActivity group paths"
+    end
+  end
+rescue => e
+  puts "  EARLY-RAW error (continuing): #{e.message[0..100]}"
+end
+
 
   if fixed && raw.size != original_size
     File.write(pbx_file, raw)
@@ -590,16 +614,27 @@ end
 # ============================================================
 puts "Aggressive LiveActivity extension group re-parent and path fix..."
 
+begin  # safe wrapper for modern group types
+
 # Find the problematic LiveActivity group: the one owning Views or having the widget files as children
 target_group = nil
 project.main_group.recursive_children_groups.each do |g|
   path = (g.path || "").to_s
   name = (g.name || "").to_s
-  has_views = g.children.any? { |c| (c.name || "").to_s == "Views" || (c.uuid || "") == "DDCEBF412CC1B42500DF4C36" }
-  has_widget_files = g.children.any? { |c| 
-    p = (c.path || c.name || "").to_s
-    p.end_with?("LiveActivity.swift") || p.end_with?("LiveActivityBundle.swift") || p.end_with?("LiveActivity+Helper.swift")
-  }
+  next if g.is_a?(Xcodeproj::Project::Object::PBXFileSystemSynchronizedRootGroup) || g.is_a?(Xcodeproj::Project::Object::PBXFileSystemSynchronizedGroup)
+  has_views = begin
+    g.children.any? { |c| (c.name || "").to_s == "Views" || (c.uuid || "") == "DDCEBF412CC1B42500DF4C36" }
+  rescue
+    false
+  end
+  has_widget_files = begin
+    g.children.any? do |cc|
+      p = (cc.path || cc.name || "").to_s
+      p.end_with?("LiveActivity.swift") || p.end_with?("LiveActivityBundle.swift") || p.end_with?("LiveActivity+Helper.swift")
+    end
+  rescue
+    false
+  end
   if (name == "LiveActivity" || path.end_with?("LiveActivity")) && (has_views || has_widget_files)
     target_group = g
     puts "  Found target LiveActivity group: name=#{name}, path=#{path}, has_views=#{has_views}, has_widget=#{has_widget_files}"
@@ -938,6 +973,10 @@ end
 #     and strips every known stacking pattern seen in previous failures.
 #     Raw text edit is the hammer to guarantee the pbxproj text the Fastlane sees is clean.
 # ============================================================
+rescue => e
+  puts "  2.8/2.9 gem section error (non-fatal): #{e.message[0..120]}"
+end
+
 puts "2.9 Final ultra-late LiveActivity path/re-parent/strip..."
 
 # Re-open project for gem attempt
@@ -1009,6 +1048,9 @@ if File.exist?(pbx_path)
   orig_size = raw.size
 
   # Clean any stacked or wrong LiveActivity group paths
+  raw.gsub!(/path = "Trio\/Sources\/Services\/LiveActivity";/, 'path = "LiveActivity";')
+  # also nuke any remaining typo Attributes FileRef
+  raw.gsub!(/6BCF84DC2B16843A003AD46E \/\* LiveActitiyAttributes\.swift \*\/ = \{isa = PBXFileReference;[^}]+\};/m, "")
   raw.gsub!(/path = "[^"]*LiveActivity[^"]*";/, 'path = "LiveActivity";')
   raw.gsub!(/path = "Trio\/Sources\/Trio\/Sources[^"]*"/, 'path = "LiveActivity"')
   raw.gsub!(/path = "Trio\/Sources\/Services\/Trio\/Sources\/Services\/LiveActivity";/, 'path = "LiveActivity";')
