@@ -313,7 +313,7 @@ if live_target
       end
     else
       puts "Adding fresh FileRef for #{basename}"
-      new_ref = project.add_file(rel_path, live_group)
+      new_ref = live_group.new_file(rel_path)
       source_phase.add_file_reference(new_ref, true) if source_phase
     end
   end
@@ -403,8 +403,8 @@ pebble_files.each do |entry|
 
   basename = File.basename(rel)
   # Always add fresh via the API (it handles quoting for + in filenames)
-  file_ref = project.add_file(rel, target_group)
-  puts "Added (or re-added) #{basename} via add_file"
+  file_ref = target_group.new_file(rel)
+  puts "Added (or re-added) #{basename} via new_file"
 
   if source_phase && file_ref
     # Ensure it is in the build phase
