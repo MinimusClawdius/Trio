@@ -3,11 +3,55 @@
 # Fixes orphaned FileReferences and BuildFiles that cause
 # "Consistency issue: no parent for object" during fastlane update_code_signing_settings.
 #
-# This version does a broad cleanup of ANY broken BuildFile across the project
-# before attempting to save, then re-wires the critical LiveActivity files.
-#
-# Run with: bundle exec ruby scripts/repair_pbxproj.rb
+# ============================================================
+# TOP-LEVEL RAW CLEANER (runs before any xcodeproj load)
+# Guarantees critical text fixes even if later high-level code crashes.
+# ============================================================
+puts "TOP-RAW-CLEANER: applying guaranteed raw fixes before loading project..."
 
+pbx_file = if ENV["GITHUB_WORKSPACE"]
+  File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj", "project.pbxproj")
+else
+  "Trio.xcodeproj/project.pbxproj"
+end
+
+if File.exist?(pbx_file)
+  raw = File.read(pbx_file)
+  orig = raw.dup
+
+  # 1. Services jam: close children array properly and remove stray path inside children
+  # Replace last child + stray path line with last child + proper close
+  raw.gsub!(/(WatchManager \*\/,\s*\n)(\s*path = "Trio\/Sources\/Services";)/, "\\1\t\t\t);\n")
+  raw.gsub!(/(,\s*\n)(\s*path = "Trio\/Sources\/Services";\s*\n\s*sourceTree = "<group>";)/, "\\1\t\t\t);\n\t\t\tsourceTree = \"<group>\";\n")
+
+  # Remove stray path line that may be left after the close
+  raw.gsub!(/(\t\t\t\);\s*\n)\s*path = "Trio\/Sources\/Services";\s*\n\s*sourceTree = "<group>";/m, "\\1")
+
+  # 2. LiveActivity group path force - critical for build input files
+  raw.gsub!(/path = "Trio\/Sources\/Services\/LiveActivity";/, 'path = "LiveActivity";')
+  raw.gsub!(/path = "[^"]*Services\/LiveActivity[^"]*";/, 'path = "LiveActivity";')
+
+  # 3. Fix heavily stacked paths
+  raw.gsub!(/path = "Trio\/Sources\/Trio\/Sources[^"]*"/, 'path = "LiveActivity"')
+  raw.gsub!(/path = "(Trio\/Sources\/){2,}[^"]*"/, 'path = "LiveActivity"')
+
+  # 4. Typo fix
+  raw.gsub!(/LiveActitiyAttributes/, 'LiveActivityAttributes')
+
+  # 5. Clean widget file refs
+  raw.gsub!(/path = "[^"]*\/(LiveActivity\.swift|LiveActivityBundle\.swift|LiveActivity\+Helper\.swift)";/, 'path = "\\1";')
+
+  if raw != orig
+    File.write(pbx_file, raw)
+    puts "TOP-RAW-CLEANER: applied fixes (Services + LiveActivity + stacked + typo)"
+  else
+    puts "TOP-RAW-CLEANER: no changes needed"
+  end
+else
+  puts "TOP-RAW-CLEANER: pbx not found"
+end
+
+puts "TOP-RAW-CLEANER complete. Proceeding to high-level repair..."
 require "xcodeproj"
 
 project_path = ENV["GITHUB_WORKSPACE"] ? File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj") : "Trio.xcodeproj"
@@ -1202,3 +1246,57 @@ else
 end
 
 puts "LATE-RAW-HAMMER complete."
+
+# ============================================================
+# FINAL-HAMMER (always attempt at very end)
+# Extra safety net for any remaining corruption after high-level
+# ============================================================
+puts "FINAL-HAMMER: last-chance raw cleanup..."
+
+pbx_path = if ENV["GITHUB_WORKSPACE"]
+  File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj", "project.pbxproj")
+else
+  "Trio.xcodeproj/project.pbxproj"
+end
+
+if File.exist?(pbx_path)
+  raw = File.read(pbx_path)
+  o = raw.dup
+
+  # Force LiveActivity group path no matter what
+  raw.gsub!(/6B1A8D1C2B14D91600E76752 \/\* LiveActivity \*\/ = \{[^}]*?path = [^;]+;/m, '6B1A8D1C2B14D91600E76752 /* LiveActivity */ = {
+			isa = PBXGroup;
+			children = (
+				DDCEBF412CC1B42500DF4C36 /* Views */,
+				6B1A8D1D2B14D91600E76752 /* LiveActivityBundle.swift */,
+				6B1A8D1F2B14D91600E76752 /* LiveActivity.swift */,
+				6B1A8D232B14D91700E76752 /* Assets.xcassets */,
+				6B1A8D252B14D91700E76752 /* Info.plist */,
+				DDCEBF5A2CC1B76400DF4C36 /* LiveActivity+Helper.swift */,
+			);
+			path = "LiveActivity";
+			sourceTree = "<group>";
+		};')
+
+  raw.gsub!(/path = "Trio\/Sources\/Services\/LiveActivity";/, 'path = "LiveActivity";')
+  raw.gsub!(/path = "[^"]*LiveActivity[^"]*\/LiveActivity[^"]*";/, 'path = "LiveActivity";')
+
+  # Clean any remaining stacked in file refs
+  raw.gsub!(/path = "Trio\/Sources\/Trio[^"]*"/, 'path = "LiveActivity"')
+  raw.gsub!(/path = "(Trio\/Sources\/){2,}[^"]*"/, 'path = "LiveActivity"')
+
+  # Fix typo everywhere
+  raw.gsub!(/LiveActitiyAttributes/, 'LiveActivityAttributes')
+
+  # Remove duplicate LiveActitiyAttributes entries if present in build phase (simple)
+  # (more sophisticated would be needed for exact PBXBuildFile dedup)
+
+  if raw != o
+    File.write(pbx_path, raw)
+    puts "FINAL-HAMMER: applied last-chance fixes"
+  else
+    puts "FINAL-HAMMER: no additional changes"
+  end
+end
+
+puts "FINAL-HAMMER complete."
