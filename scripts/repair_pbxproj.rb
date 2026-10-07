@@ -764,4 +764,54 @@ else
   puts "WARNING: Could not locate project.pbxproj for validation"
 end
 
+
+# ============================================================
+# 9. Correct relative paths for source files that live under
+#    the "Trio/" subdirectory in this fork (common after merges
+#    that assume flat Sources/ layout).
+#    This prevents "Build input file cannot be found" for
+#    Nightscout/Network/Tidepool and similar groups.
+# ============================================================
+puts "Correcting source paths for files that only exist under Trio/ prefix..."
+
+corrected = 0
+project.files.each do |fr|
+  next unless fr.respond_to?(:path) && fr.path
+  next if fr.path.start_with?("Trio/")
+
+  bare_path = fr.path
+  trio_path = "Trio/#{bare_path}"
+
+  if File.exist?(trio_path) && !File.exist?(bare_path)
+    puts "  Fixing FileRef path: #{bare_path} → #{trio_path}"
+    fr.path = trio_path
+    corrected += 1
+  end
+end
+
+if corrected > 0
+  puts "Corrected #{corrected} source FileRef path(s) to use Trio/ prefix."
+else
+  puts "No path corrections needed (or files already correct)."
+end
+
+# Second pass for any under Sources/ or Services/ etc.
+project.files.each do |fr|
+  next unless fr.respond_to?(:path) && fr.path
+  next if fr.path.start_with?("Trio/")
+
+  if fr.path =~ %r{^(Sources|Services|LiveActivity)/}
+    candidate = "Trio/#{fr.path}"
+    if File.exist?(candidate) && !File.exist?(fr.path)
+      puts "  Fixing (second pass) #{fr.path} → #{candidate}"
+      fr.path = candidate
+      corrected += 1
+    end
+  end
+end
+
+if corrected > 0
+  puts "Total path corrections applied: #{corrected}"
+end
+
 puts "Repair script completed successfully with validation."
