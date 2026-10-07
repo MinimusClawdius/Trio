@@ -179,20 +179,23 @@ puts "Project saved successfully. Repair complete."
 #    This guarantees the pbxproj text is emitted cleanly without
 #    any previous text-edit corruption or missing commas.
 # ============================================================
-puts "Performing clean Pebble integration (remove stale + fresh add)..."
+if ENV["SKIP_PEBBLE"] == "1"
+  puts "SKIP_PEBBLE=1 set — skipping Pebble addition for diagnostic run."
+else
+  puts "Performing clean Pebble integration (remove stale + fresh add)..."
 
-services_group = project.main_group.recursive_children_groups.find do |g|
-  (g.path && g.path == "Services") || (g.name && g.name == "Services")
-end
+  services_group = project.main_group.recursive_children_groups.find do |g|
+    (g.path && g.path == "Services") || (g.name && g.name == "Services")
+  end
 
-if services_group.nil?
-  puts "WARNING: Services group not found, creating it"
-  services_group = project.new_group("Services", "Services")
-  project.main_group.children << services_group
-end
+  if services_group.nil?
+    puts "WARNING: Services group not found, creating it"
+    services_group = project.new_group("Services", "Services")
+    project.main_group.children << services_group
+  end
 
-# Remove any existing Pebble subgroups and their file refs to start clean
-["PebbleManager", "PebbleService"].each do |gname|
+  # Remove any existing Pebble subgroups and their file refs to start clean
+  ["PebbleManager", "PebbleService"].each do |gname|
   existing = services_group.children.find { |c| (c.respond_to?(:path) && c.path == gname) || (c.respond_to?(:name) && c.name == gname) }
   if existing
     # Remove file refs from build phases first
@@ -257,6 +260,7 @@ pebble_files.each do |entry|
 end
 
 puts "Pebble clean integration complete."
+end   # end of if ENV["SKIP_PEBBLE"] == "1" else block
 # ============================================================
 # 5. Force clean re-serialization of Appearance and Network groups
 #    (the text corruption "Network = {" inside Appearance children was introduced by
@@ -353,10 +357,25 @@ end
   force_recreate_group(project, g) if g
 end
 
-# Also re-create the main target source phase files if possible (re-adding refs)
+# Also re-create the main target source phase files array to flush any
+# corruption in the "files" list of PBXSourcesBuildPhase (common source of
+# "Array missing ',' in between objects" during update_project_team).
 main_t = project.targets.find { |t| t.name.to_s == "Trio" }
-if main_t
-  # Just touching the phase by re-adding known files can help, but skip for now
+if main_t && main_t.source_build_phase
+  phase = main_t.source_build_phase
+  puts "Force-refreshing main Trio source_build_phase files array (#{phase.files.size} current entries)..."
+  # Collect current file_refs
+  current_refs = phase.files.map { |bf| bf.file_ref }.compact
+  # Remove all and re-add to force clean serialization of the phase's files array
+  phase.files.clear rescue nil
+  current_refs.each do |fr|
+    begin
+      phase.add_file_reference(fr, true)
+    rescue => e
+      puts "  Warning re-adding ref #{fr.path rescue 'unknown'}: #{e}"
+    end
+  end
+  puts "  Refreshed source phase with #{current_refs.size} file references."
 end
 
 puts "Aggressive re-serialization done. Final save..."
@@ -368,3 +387,60 @@ puts "Round-trip open/save to force clean plist emission..."
 project = Xcodeproj::Project.open(project_path)
 project.save
 puts "Round-trip save complete."
+
+# ============================================================
+# 8. Post-save validation: read the raw pbxproj and fail loudly
+#    if any known text corruption patterns remain. This catches
+#    cases where the API writes still left bad arrays.
+# ============================================================
+puts "Running post-save raw text validation for corruption patterns..."
+
+pbx_path = File.join(File.dirname(project_path), "project.pbxproj")
+unless File.exist?(pbx_path)
+  # project_path points to the .xcodeproj dir in some setups
+  pbx_path = File.join(project_path, "project.pbxproj") if Dir.exist?(project_path)
+end
+
+if File.exist?(pbx_path)
+  raw = File.read(pbx_path)
+
+  bad_patterns = [
+    # Jammed group definitions inside children arrays (classic corruption)
+    /\/\*\s*(Network|Services|Appearance|Pebble)[^*]*\*\/\s*=\s*\{[^}]*path\s*=\s*[^;]*;\s*sourceTree[^}]*\};/m,
+    # "Network */ = {" embedded without proper comma
+    /AppearanceManager[^}]{0,100}Network \*/ = \{/,
+    # Consecutive object starts without comma between them in arrays
+    /\}\s*,\s*\{[^}]*\}\s*;\s*\{/m,   # rough
+    /path = [^;\"]*\+[^;\"]*;(?![^;]*;)/, # unquoted + paths that may have caused issues
+    # Old-style jammed entries from python edits
+    /\);\s*path = (Services|Network|Pebble)/,
+    # Any Pebble GID from known bad commits still lingering as raw text
+    /BEA75ECA|51C9D754|3811DE9[0-9A-F]/
+  ]
+
+  found_bad = false
+  bad_patterns.each do |pat|
+    if raw =~ pat
+      found_bad = true
+      puts "!!! CORRUPTION DETECTED by pattern: #{pat.inspect}"
+      # Print context around first match
+      idx = raw =~ pat
+      start = [idx - 200, 0].max
+      finish = [idx + 400, raw.length].min
+      puts "Context (lines ~#{raw[0,idx].count("\n")}):"
+      puts raw[start..finish]
+      puts "--- end context ---"
+      break
+    end
+  end
+
+  if found_bad
+    raise "Validation FAILED: pbxproj still contains text corruption after repair. See logs above. The emitted plist has bad arrays."
+  else
+    puts "Post-save validation PASSED: no known corruption patterns detected in raw pbxproj."
+  end
+else
+  puts "WARNING: Could not locate project.pbxproj for validation at #{pbx_path}"
+end
+
+puts "Repair script completed successfully with validation."
