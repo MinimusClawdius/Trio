@@ -13,6 +13,72 @@ require "xcodeproj"
 project_path = ENV["GITHUB_WORKSPACE"] ? File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj") : "Trio.xcodeproj"
 puts "Repairing project at #{project_path}"
 
+# ============================================================
+# Pre-load raw text repair for known text-level corruption patterns
+# (especially the "path = Services;" jammed inside Services children array)
+# This fixes cases where the high-level Xcodeproj gem loads a partially
+# corrupted file and the later re-serialization doesn't fully clean it.
+# ============================================================
+pbx_file = if ENV["GITHUB_WORKSPACE"]
+  File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj", "project.pbxproj")
+else
+  "Trio.xcodeproj/project.pbxproj"
+end
+
+if File.exist?(pbx_file)
+  raw = File.read(pbx_file)
+  original_size = raw.size
+  fixed = false
+
+  # Known jam: inside the Services group children list, a stray
+  # "path = Services;" / sourceTree block appears before the proper closing
+  # of the children array. This produces "Array missing ',' in between objects".
+  #
+  # Pattern seen:
+  #     38E8754D... /* WatchManager */,
+  # 			path = Services;
+  # 			sourceTree = "<group>";
+  # 		};
+  #
+  # We insert the missing ");" to close the children array.
+  if raw =~ /WatchManager \*/m && raw =~ /path = Services;/m
+    # Try to fix the specific jammed fragment
+    # Replace the bad sequence with a properly closed children list
+    new_raw = raw.gsub(
+      /(,\s*\n\s*38E8754D[0-9A-Fa-f]+ \/\* WatchManager \*\/,\s*\n)(\s*path = Services;\s*\n\s*sourceTree = "<group>";\s*\n\s*\};)/m,
+      "\\1\t\t\t);\n\\2"
+    )
+    if new_raw != raw
+      raw = new_raw
+      fixed = true
+      puts "Applied raw text fix for Services children jam (WatchManager -> path=Services)"
+    end
+  end
+
+  # More general fallback: any occurrence of bare "path = Services;" right after
+  # a child entry inside what should be a children array, insert ");" before it.
+  if raw =~ /,\s*\n\s*path = Services;\s*\n\s*sourceTree = "<group>";/m
+    new_raw = raw.gsub(
+      /(,\s*\n)(\s*path = Services;\s*\n\s*sourceTree = "<group>";)/m,
+      "\\1\t\t\t);\n\\2"
+    )
+    if new_raw != raw
+      raw = new_raw
+      fixed = true
+      puts "Applied general raw text fix for Services path=Services jam"
+    end
+  end
+
+  if fixed && raw.size != original_size
+    File.write(pbx_file, raw)
+    puts "Wrote pre-fixed project.pbxproj (size #{raw.size} from #{original_size})"
+  else
+    puts "No Services jam detected in raw pre-fix pass (or already clean)"
+  end
+else
+  puts "WARNING: Could not find pbxproj for pre-fix at #{pbx_file}"
+end
+
 project = Xcodeproj::Project.open(project_path)
 
 # ============================================================
@@ -410,6 +476,15 @@ if File.exist?(pbx_path)
     found_bad = true
     context = raw[raw.index(");path = Services") - 150 .. raw.index(");path = Services") + 300] rescue "context extract failed"
     puts "!!! Found Services jam pattern"
+  # Stronger check for the exact corruption seen in run 37610354656:
+  # bare "path = Services;" line appearing inside a children = ( ... ) array
+  if !found_bad && raw =~ /,\s*\n\s*path = Services;\s*\n\s*sourceTree = "<group>";/m
+    found_bad = true
+    idx = raw.index("path = Services;") || 0
+    context = raw[[idx-220,0].max .. [idx+280, raw.size].min] rescue nil
+    puts "!!! Found bare 'path = Services;' inside children array (Services group corruption)"
+  end
+
   end
 
   if !found_bad && raw =~ /AppearanceManager.*Network \*/m
