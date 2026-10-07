@@ -214,8 +214,8 @@ jobs:
 
           # Trio workspace patches
           # -applies any patches located in the Trio/patches/ directory
-          if $(ls ./patches/* &> /dev/null); then
-          git apply ./patches/* --allow-empty -v --whitespace=fix
+          if ls ./patches/*.patch > /dev/null 2>&1; then
+            git apply ./patches/*.patch --allow-empty -v --whitespace=fix
           fi
 
           # Download and apply Trio patches from GitHub:
