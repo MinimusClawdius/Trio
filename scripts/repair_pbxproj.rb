@@ -557,6 +557,45 @@ unless File.exist?(pbx_path)
 end
 
 # Final robust orphan strip right before validation/Fastlane sees the file
+# (call the same logic one last time)
+if File.exist?(pbx_path)
+  raw_final = File.read(pbx_path)
+  end_m = "/* End PBXGroup section */"
+  if raw_final.include?(end_m)
+    b, a = raw_final.split(end_m, 2)
+    lines = b.split("\n")
+    out = []
+    i = 0
+    removed = 0
+    while i < lines.size
+      line = lines[i]
+      stripped = line.strip
+      if stripped == "children = ("
+        if i + 3 < lines.size
+          l1 = lines[i+1].strip
+          l2 = lines[i+2].strip
+          l3 = lines[i+3].strip
+          if l1 == ");" && l2.start_with?('sourceTree = "<group>"') && l3 == "};"
+            prev = i > 0 ? lines[i-1].strip : ""
+            is_real = prev.end_with?("= {") || prev.include?("isa = PBXGroup")
+            if !is_real
+              removed += 1
+              i += 4
+              next
+            end
+          end
+        end
+      end
+      out << line
+      i += 1
+    end
+    if removed > 0
+      File.write(pbx_path, out.join("\n") + end_m + a)
+      puts "  FINAL ROBUST STRIP (end of repair): removed #{removed} orphan block(s)"
+    end
+  end
+end
+
 if File.exist?(pbx_path)
   raw_final = File.read(pbx_path)
   end_m = "/* End PBXGroup section */"
