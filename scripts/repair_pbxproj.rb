@@ -7,34 +7,6 @@
 # before attempting to save, then re-wires the critical LiveActivity files.
 #
 # Run with: bundle exec ruby scripts/repair_pbxproj.rb
-# ============================================================
-# EARLY RAW ATTRIBUTES NUKE (before any project load)
-# ============================================================
-puts "EARLY-ATTRIBUTES-NUKE: removing bad LiveActivityAttributes from extension (pre-load)..."
-pbx_early = if ENV["GITHUB_WORKSPACE"]
-  File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj", "project.pbxproj")
-else
-  "Trio.xcodeproj/project.pbxproj"
-end
-if File.exist?(pbx_early)
-  raw = File.read(pbx_early)
-  o = raw.dup
-  bad_dd = "6BCF84DD2B16843A003AD46E"
-  bad_de = "6BCF84DE2B16843A003AD46E"
-  raw.gsub!(/^		#{bad_dd} \/\* LiveActivityAttributes\.swift in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* LiveActivityAttributes\.swift \*\/; \};\s*$/, '')
-  raw.gsub!(/^		#{bad_de} \/\* LiveActivityAttributes\.swift in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* LiveActivityAttributes\.swift \*\/; \};\s*$/, '')
-  raw.gsub!(/^				#{bad_dd} \/\* LiveActivityAttributes\.swift in Sources \*\/,?\s*$/, '')
-  raw.gsub!(/^				#{bad_de} \/\* LiveActivityAttributes\.swift in Sources \*\/,?\s*$/, '')
-  raw.gsub!(/#{bad_dd} \/\* LiveActivityAttributes\.swift in Sources \*\//, '')
-  raw.gsub!(/#{bad_de} \/\* LiveActivityAttributes\.swift in Sources \*\//, '')
-  if raw != o
-    File.write(pbx_early, raw)
-    puts "EARLY-ATTRIBUTES-NUKE: applied (bad Attributes BuildFiles removed pre-load)"
-  else
-    puts "EARLY-ATTRIBUTES-NUKE: no change needed (pre-load)"
-  end
-end
-
 
 require "xcodeproj"
 
@@ -533,20 +505,6 @@ if live_target
       unless has_it
         puts "  Adding clean #{basename} to LiveActivityExtension sources"
         source_phase.add_file_reference(ref, true)
-  # Extra: explicitly drop any LiveActivityAttributes (main app version) from the extension
-  attrs = project.files.select { |f| f.path.to_s.end_with?("LiveActivityAttributes.swift") rescue false }
-  attrs.each do |fr|
-    removed = 0
-    if source_phase
-      before = source_phase.files.size
-      source_phase.files.reject! { |bf| (bf.file_ref == fr) rescue false }
-      removed = before - source_phase.files.size
-    end
-    if removed > 0
-      puts "  High-level pruned LiveActivityAttributes.swift (#{fr.uuid}) from extension (#{removed} entries)"
-    end
-  end
-
       end
     end
   end
@@ -1385,39 +1343,25 @@ end
 puts "LATE-RAW-HAMMER complete. Script exiting."
 
 # ============================================================
-# FINAL ATTRIBUTES NUKE (UUID-specific, after all other logic)
-# Ensures the bad main-app LiveActivityAttributes.swift BuildFiles
-# are removed from the LiveActivityExtension sources phase.
+# FINAL ATTRIBUTES NUKE (safe append at end)
 # ============================================================
-puts "FINAL-ATTRIBUTES-NUKE: removing LiveActivityAttributes from extension..."
-pbx = if ENV["GITHUB_WORKSPACE"]
-  File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj", "project.pbxproj")
-else
-  "Trio.xcodeproj/project.pbxproj"
-end
+puts "FINAL-ATTRIBUTES-NUKE: removing bad LiveActivityAttributes BuildFiles..."
+pbx = ENV["GITHUB_WORKSPACE"] ? File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj", "project.pbxproj") : "Trio.xcodeproj/project.pbxproj"
 if File.exist?(pbx)
   raw = File.read(pbx)
-  o = raw.dup
-
+  orig = raw.dup
   bad_dd = "6BCF84DD2B16843A003AD46E"
   bad_de = "6BCF84DE2B16843A003AD46E"
-
-  # Remove the exact bad BuildFile definitions
-  raw.gsub!(/^\t\t#{bad_dd} \/\* LiveActivityAttributes\.swift in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* LiveActivityAttributes\.swift \*\/; \};\s*$/, '')
-  raw.gsub!(/^\t\t#{bad_de} \/\* LiveActivityAttributes\.swift in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* LiveActivityAttributes\.swift \*\/; \};\s*$/, '')
-
-  # Remove from files lists (with or without comma)
-  raw.gsub!(/^\t\t\t\t#{bad_dd} \/\* LiveActivityAttributes\.swift in Sources \*\/,?\s*$/, '')
-  raw.gsub!(/^\t\t\t\t#{bad_de} \/\* LiveActivityAttributes\.swift in Sources \*\/,?\s*$/, '')
-
-  # Loose removal of any remaining references
-  raw.gsub!(/#{bad_dd} \/\* LiveActivityAttributes\.swift in Sources \*\//, '')
-  raw.gsub!(/#{bad_de} \/\* LiveActivityAttributes\.swift in Sources \*\//, '')
-
-  if raw != o
+  raw.gsub!(/^\t\t#{bad_dd} \/\* LiveActivityAttributes\.swift in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* LiveActivityAttributes\.swift \*\/; \};\s*$/, "")
+  raw.gsub!(/^\t\t#{bad_de} \/\* LiveActivityAttributes\.swift in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* LiveActivityAttributes\.swift \*\/; \};\s*$/, "")
+  raw.gsub!(/^\t\t\t\t#{bad_dd} \/\* LiveActivityAttributes\.swift in Sources \*\/,?\s*$/, "")
+  raw.gsub!(/^\t\t\t\t#{bad_de} \/\* LiveActivityAttributes\.swift in Sources \*\/,?\s*$/, "")
+  raw.gsub!(/#{bad_dd} \/\* LiveActivityAttributes\.swift in Sources \*\//, "")
+  raw.gsub!(/#{bad_de} \/\* LiveActivityAttributes\.swift in Sources \*\//, "")
+  if raw != orig
     File.write(pbx, raw)
-    puts "FINAL-ATTRIBUTES-NUKE: removed bad Attributes BuildFiles"
+    puts "FINAL-ATTRIBUTES-NUKE: removed bad entries"
   else
-    puts "FINAL-ATTRIBUTES-NUKE: no matching bad entries (already clean or not present)"
+    puts "FINAL-ATTRIBUTES-NUKE: no bad entries found to remove"
   end
 end
