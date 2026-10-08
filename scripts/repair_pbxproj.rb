@@ -1634,6 +1634,49 @@ else
 end
 
 
+
+# ============================================================
+# CLEANUP: Remove any bad "LiveActivity" directory-as-file references
+# These cause "multiple commands produce LiveActivity.stringsdata" and other
+# duplicate output errors in the extension target.
+# ============================================================
+puts "=== CLEANUP: removing bad bare LiveActivity directory FileRefs ==="
+
+begin
+  bad_refs = project.files.select do |f|
+    p = (f.path || f.name || "").to_s
+    p == "LiveActivity" || (p.end_with?("/LiveActivity") && !p.end_with?(".swift"))
+  end
+
+  bad_refs.each do |bad|
+    puts "  Removing bad LiveActivity dir ref: #{bad.uuid} path=#{bad.path}"
+    # Remove from all build phases in LiveActivityExtension target
+    project.targets.each do |t|
+      next unless t.name.to_s.downcase.include?("liveactivity")
+      [t.source_build_phase, t.resources_build_phase].compact.each do |phase|
+        phase.files.select { |bf| bf.file_ref == bad }.each do |bf|
+          phase.remove_build_file(bf) rescue nil
+        end
+      end
+    end
+    # Remove from groups
+    project.main_group.recursive_children_groups.each do |g|
+      g.children.delete(bad) rescue nil
+    end
+    # Delete the file ref
+    project.files.delete(bad) rescue nil
+  end
+
+  if bad_refs.any?
+    project.save
+    puts "  CLEANUP: removed #{bad_refs.size} bad LiveActivity dir refs and saved"
+  else
+    puts "  CLEANUP: no bad bare LiveActivity dir refs found"
+  end
+rescue => e
+  puts "  CLEANUP error: #{e.message}"
+end
+
 # ============================================================
 # FINAL ULTRA-LATE FORCE: Add LiveActivityAttributes to LiveActivityExtension
 # This runs after all raw hammers and previous logic.
