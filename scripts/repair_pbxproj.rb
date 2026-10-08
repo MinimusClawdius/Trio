@@ -601,18 +601,25 @@ if live_target
 
   # === Ensure LiveActivityAttributes (and +Helper) are present for the widget extension ===
   # Widget Views (in LiveActivity/Views/WidgetItems) use LiveActivityAttributes type.
-  # Add the correct (non-typo) files to the extension sources.
+  # The rich definition now lives at Trio/Sources/Services/LiveActivity/LiveActivityAttributes.swift
+  # (after cleaning the previous typo "LiveActitiy").
   %w[LiveActivityAttributes.swift LiveActivityAttributes+Helper.swift].each do |fname|
     ref = project.files.find { |f| f.path && f.path.to_s.end_with?(fname) }
     if ref.nil?
       candidates = [
         "Trio/Sources/Services/LiveActivity/#{fname}",
-        "Sources/Services/LiveActivity/#{fname}"
+        "Sources/Services/LiveActivity/#{fname}",
+        "LiveActivity/#{fname}"   # fallback if someone placed a copy in the widget tree
       ]
       found = candidates.find { |p| File.exist?(p) }
       if found
         puts "  Creating FileRef for #{fname} from #{found}"
         ref = project.new_file(found)
+        # Force a clean bare path so the extension can find it easily
+        if ref && ref.path.to_s != fname
+          ref.path = fname
+          puts "  Forced clean path for #{fname}"
+        end
       else
         puts "  WARNING: source not found for #{fname}"
       end
@@ -627,13 +634,28 @@ if live_target
     end
   end
 
-  # Nuke any typo LiveActitiyAttributes refs
+  # Nuke any remaining references that still point at the old typo spelling
   if source_phase
     source_phase.files.each do |bf|
       next unless bf.file_ref && bf.file_ref.path
       if bf.file_ref.path.to_s.include?("LiveActitiyAttributes")
-        puts "  Removing typo LiveActitiyAttributes: #{bf.file_ref.path}"
+        puts "  Removing old typo LiveActitiyAttributes: #{bf.file_ref.path}"
         source_phase.remove_file_reference(bf.file_ref) rescue nil
+      end
+    end
+  end
+
+  # Also ensure the attributes files are children of the LiveActivity group used by the extension
+  # so the compiler can resolve the type when compiling LiveActivity.swift + Views.
+  live_group = project.main_group.recursive_children_groups.find do |g|
+    (g.path || g.name || "").to_s == "LiveActivity"
+  end
+  if live_group
+    %w[LiveActivityAttributes.swift LiveActivityAttributes+Helper.swift].each do |fname|
+      ref = project.files.find { |f| f.path && f.path.to_s.end_with?(fname) }
+      if ref && !live_group.children.include?(ref)
+        live_group.children << ref rescue nil
+        puts "  Ensured #{fname} is child of LiveActivity group"
       end
     end
   end
@@ -1079,6 +1101,92 @@ if live_target2
   end
 end
 
+
+# ============================================================
+# DISCOVERY: Add ALL .swift files under LiveActivity/ to the LiveActivityExtension
+# The previous hard-coded list missed the Views/ and WidgetItems/ files.
+# These files exist on disk but had no PBXFileReference at all.
+# ============================================================
+puts "=== DISCOVERY PASS: scanning LiveActivity/ for all widget sources ==="
+
+live_target = project.targets.find { |t| t.name.to_s.downcase.include?("liveactivity") }
+
+if live_target
+  source_phase = live_target.source_build_phase
+  if source_phase
+    # Find or create a top-level LiveActivity group for clean references
+    live_group = project.main_group.recursive_children_groups.find do |g|
+      (g.path || g.name || "").to_s == "LiveActivity"
+    end
+    live_group ||= project.main_group
+
+    # Recursively find every .swift under LiveActivity on disk
+    widget_swift_files = []
+    if Dir.exist?("LiveActivity")
+      Dir.glob("LiveActivity/**/*.swift").each do |full|
+        next if full.include?("/.")  # skip hidden
+        widget_swift_files << full
+      end
+    end
+
+    puts "  Found #{widget_swift_files.size} .swift files under LiveActivity/ on disk"
+
+    added = 0
+    widget_swift_files.each do |disk_path|
+      basename = File.basename(disk_path)
+      # Skip the known-bad filename with space
+      if basename.include?(" ")
+        puts "  SKIPPING bad filename with space: #{disk_path}"
+        next
+      end
+
+      # Try to find an existing FileRef (by basename or full-ish path)
+      ref = project.files.find do |f|
+        p = (f.path || f.name || "").to_s
+        p == basename || p.end_with?("/#{basename}") || p.end_with?(basename)
+      end
+
+      if ref.nil?
+        puts "  Creating FileRef for missing widget file: #{disk_path}"
+        begin
+          ref = project.new_file(disk_path)
+        rescue => e
+          puts "    new_file failed for #{disk_path}: #{e.message}"
+          next
+        end
+      end
+
+      # Make sure it's under the LiveActivity group if possible
+      if ref && !live_group.children.include?(ref)
+        begin
+          live_group.children << ref
+        rescue
+        end
+      end
+
+      # Add to the extension source phase (dedup first)
+      if ref && source_phase
+        source_phase.files.select { |bf| bf.file_ref == ref }.each do |bf|
+          source_phase.remove_file_reference(ref) rescue nil
+        end
+        has_it = source_phase.files.any? { |bf| (bf.file_ref == ref) rescue false }
+        unless has_it
+          begin
+            source_phase.add_file_reference(ref, true)
+            puts "  Wired to LiveActivityExtension: #{basename}"
+            added += 1
+          rescue => e
+            puts "    add_file_reference failed for #{basename}: #{e.message}"
+          end
+        end
+      end
+    end
+
+    puts "  Discovery pass added/wired #{added} widget source file(s) to the extension"
+  end
+else
+  puts "  WARNING: no LiveActivity target found for discovery pass"
+end
 
 # === VERY LATE RAW HAMMER: nuke any remaining directory LiveActivity refs in extension context ===
 begin
