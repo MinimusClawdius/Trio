@@ -99,18 +99,10 @@ if File.exist?(pbx_file)
   end
 
   
-  # Early removal of bad Attributes BuildFiles (before any high-level processing)
-  bad_dd = "6BCF84DD2B16843A003AD46E"
-  bad_de = "6BCF84DE2B16843A003AD46E"
-  ["LiveActivityAttributes.swift", "LiveActitiyAttributes.swift"].each do |sp|
-    raw.gsub!(/^\t\t#{bad_dd} \/\* #{sp} in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* #{sp} \*\/; \};\s*$/, "")
-    raw.gsub!(/^\t\t#{bad_de} \/\* #{sp} in Sources \*\/ = \{isa = PBXBuildFile; fileRef = 6BCF84DC2B16843A003AD46E \/\* #{sp} \*\/; \};\s*$/, "")
-    raw.gsub!(/^\t\t\t\t#{bad_dd} \/\* #{sp} in Sources \*\/,?\s*$/, "")
-    raw.gsub!(/^\t\t\t\t#{bad_de} \/\* #{sp} in Sources \*\/,?\s*$/, "")
-    raw.gsub!(/#{bad_dd} \/\* #{sp} in Sources \*\//, "")
-    raw.gsub!(/#{bad_de} \/\* #{sp} in Sources \*\//, "")
-  end
-  puts "EARLY-ATTRIBUTES-NUKE: applied (if any bad entries present)"
+  # Early removal of bad Attributes BuildFiles DISABLED.
+  # This was too aggressive and removed legitimate BuildFiles for the
+  # LiveActivityExtension. Correct addition is handled by ensure block + final force.
+  puts "EARLY-ATTRIBUTES-NUKE: DISABLED (attributes will be added to extension by later logic)"
 # === EARLY RAW CLEAN (before any potentially crashing gem traversal) ===
 begin
   pbx_early = if ENV["GITHUB_WORKSPACE"]
@@ -1639,6 +1631,59 @@ if File.exist?(pbx_path)
   end
 else
   puts "LATE-RAW-HAMMER: pbx_path not found"
+end
+
+
+# ============================================================
+# FINAL ULTRA-LATE FORCE: Add LiveActivityAttributes to LiveActivityExtension
+# This runs after all raw hammers and previous logic.
+# ============================================================
+puts "=== FINAL FORCE: ensuring LiveActivityAttributes in extension sources ==="
+
+begin
+  live_target = project.targets.find { |t| t.name.to_s.downcase.include?("liveactivity") }
+  if live_target
+    source_phase = live_target.source_build_phase
+    if source_phase
+      %w[LiveActivityAttributes.swift LiveActivityAttributes+Helper.swift].each do |fname|
+        ref = project.files.find { |f| f.path && f.path.to_s.end_with?(fname) }
+        if ref.nil?
+          candidates = [
+            "Trio/Sources/Services/LiveActivity/#{fname}",
+            "Sources/Services/LiveActivity/#{fname}",
+            "LiveActivity/#{fname}"
+          ]
+          found = candidates.find { |p| File.exist?(p) }
+          if found
+            ref = project.new_file(found)
+            if ref && ref.path.to_s != fname
+              ref.path = fname
+            end
+            puts "  FINAL: created ref for #{fname}"
+          end
+        end
+        if ref && source_phase
+          # dedup
+          source_phase.files.select { |bf| bf.file_ref == ref }.each do |bf|
+            source_phase.remove_file_reference(ref) rescue nil
+          end
+          has_it = source_phase.files.any? { |bf| bf.file_ref == ref }
+          unless has_it
+            source_phase.add_file_reference(ref, true)
+            puts "  FINAL FORCE: added #{fname} to LiveActivityExtension sources"
+          else
+            puts "  FINAL: #{fname} already present in extension sources"
+          end
+        end
+      end
+      project.save
+      puts "  FINAL: project re-saved after attributes force"
+    end
+  else
+    puts "  FINAL: no live_target found"
+  end
+rescue => e
+  puts "  FINAL force error: #{e.message}"
 end
 
 puts "LATE-RAW-HAMMER complete. Script exiting."
