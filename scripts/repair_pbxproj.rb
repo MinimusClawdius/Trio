@@ -113,14 +113,13 @@ begin
   if File.exist?(pbx_early)
     r = File.read(pbx_early)
     o = r.dup
-    r.gsub!(/path = "[^"]*LiveActivity[^"]*";/, 'path = "LiveActivity";')
-    r.gsub!(/path = "Trio\/Sources\/Services\/LiveActivity";/, 'path = "LiveActivity";')
-    r.gsub!(/path = "[^"]*Trio\/[^"]*LiveActivity[^"]*";/, 'path = "LiveActivity";')
-    r.gsub!(/path = "[^"]*Sources\/Services\/LiveActivity[^"]*";/, 'path = "LiveActivity";')
-    r.gsub!(/path = "Trio\/Sources\/Services\/LiveActivity";/, 'path = "LiveActivity";')
+    # Only clean group/dir references to LiveActivity, never .swift files or full paths
+    r.gsub!(/path = "LiveActivity";/, 'path = "LiveActivity";')  # no-op, but structure
+    r.gsub!(/path = "([^"]*\/)?LiveActivity";/, 'path = "LiveActivity";')  # dir only
+    # Do not touch paths that contain .swift or full Services paths
     if r != o
       File.write(pbx_early, r)
-      puts "  EARLY-RAW: cleaned LiveActivity group paths"
+      puts "  EARLY-RAW: cleaned LiveActivity group paths (dir only)"
     end
   end
 rescue => e
@@ -1702,8 +1701,11 @@ begin
           found = candidates.find { |p| File.exist?(p) }
           if found
             ref = project.new_file(found)
-            if ref && ref.path.to_s != fname
-              ref.path = fname
+            # Keep the full path (Trio/Sources/Services/LiveActivity/...) for Attributes
+            # so the compiler can locate the real source file on disk.
+            if ref && ref.path.to_s != found
+              ref.path = found
+              puts "  FINAL: set full path for #{fname} -> #{found}"
             end
             puts "  FINAL: created ref for #{fname}"
           end
