@@ -608,9 +608,12 @@ if live_target
         puts "  Creating FileRef for #{fname} from #{found}"
         ref = project.new_file(found)
         # Force a clean bare path so the extension can find it easily
-        if ref && ref.path.to_s != fname
-          ref.path = fname
-          puts "  Forced clean path for #{fname}"
+        if ref
+          correct_path = found
+          if ref.path.to_s != correct_path
+            ref.path = correct_path
+            puts "  Set correct full path for #{fname}: #{correct_path}"
+          end
         end
       else
         puts "  WARNING: source not found for #{fname}"
