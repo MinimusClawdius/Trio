@@ -10,6 +10,17 @@
 
 require "xcodeproj"
 
+# === FORCED EARLY FIX FOR LIVEACTIVITY SHARED FILES (run very early on raw) ===
+# Force the exact correct paths on the shared Attributes and Manager.
+# Strip any "path = LiveActivity" from the organizational shared group.
+# Normalize any duplicated "Trio/Sources/" stacking that previous passes may have created.
+raw.gsub!(/(6BCF84DC2B16843A003AD46E \/\* LiveActivityAttributes\.swift \*\/ = \{isa = PBXFileReference; lastKnownFileType = sourcecode\.swift; )path = [^;]+;/, '\1path = "Trio/Sources/Services/LiveActivity/LiveActivityAttributes.swift";')
+raw.gsub!(/(6B1A8D2D2B156EEF00E76752 \/\* LiveActivityManager\.swift \*\/ = \{isa = PBXFileReference; lastKnownFileType = sourcecode\.swift; )path = [^;]+;/, '\1path = "Trio/Sources/Services/LiveActivity/LiveActivityManager.swift";')
+raw.gsub!(/(6B1A8D2C2B156EC100E76752 \/\* LiveActivity \*\/ = \{[^}]*?)path = LiveActivity;\s*/, '\1')
+raw.gsub!(/(Trio\/Sources\/)+/, 'Trio/Sources/')
+raw.gsub!(/path = "Trio\/Sources\/Trio\/Sources\//, 'path = "Trio/Sources/')
+
+
 project_path = ENV["GITHUB_WORKSPACE"] ? File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj") : "Trio.xcodeproj"
 puts "Repairing project at #{project_path}"
 
