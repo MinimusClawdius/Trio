@@ -110,6 +110,15 @@ raw.gsub!(/\t\t[0-9A-F]+ \/\* LiveActivityAttributes\+Helper\.swift in Sources \
 raw.gsub!(/\t\t\t\t[0-9A-F]+ \/\* LiveActivityAttributes\+Helper\.swift in Sources \*\/,\s*\n/, '')
 raw.gsub!(/A522228ECDADC08A694CEDD1 \/\* LiveActivityAttributes\+Helper\.swift \*\/ = \{isa = PBXFileReference; [^}]*\};?\s*\n/, '')
 
+
+# === STRUCTURAL FIX FOR SHARED LIVEACTIVITY GROUP ===
+# The "LiveActivity" group holding Manager + Attributes must NOT have path = "LiveActivity"
+# (that conflicts with the widget extension's LiveActivity/ folder at root).
+# Force full paths on the refs so they resolve from project root.
+raw.gsub!(/6B1A8D2C2B156EC100E76752 \/\* LiveActivity \*\/ = \{([^}]*?)path = LiveActivity;\s*/, '6B1A8D2C2B156EC100E76752 /* LiveActivity */ = {')
+raw.gsub!(/(6B1A8D2D2B156EEF00E76752 \/\* LiveActivityManager\.swift \*\/ = \{isa = PBXFileReference; lastKnownFileType = sourcecode\.swift; )path = [^;]+;/, 'path = "Trio/Sources/Services/LiveActivity/LiveActivityManager.swift";')
+raw.gsub!(/(6BCF84DC2B16843A003AD46E \/\* LiveActivityAttributes\.swift \*\/ = \{isa = PBXFileReference; lastKnownFileType = sourcecode\.swift; )path = [^;]+;/, 'path = "Trio/Sources/Services/LiveActivity/LiveActivityAttributes.swift";')
+
 # === EARLY RAW CLEAN (before any potentially crashing gem traversal) ===
 begin
   pbx_early = if ENV["GITHUB_WORKSPACE"]
