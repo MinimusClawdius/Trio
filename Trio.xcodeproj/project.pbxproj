@@ -1473,7 +1473,7 @@
 		6B1A8D1F2B14D91600E76752 /* LiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivity.swift; sourceTree = "<group>"; };
 		6B1A8D232B14D91700E76752 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6B1A8D252B14D91700E76752 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		6B1A8D2D2B156EEF00E76752 /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityManager.swift; sourceTree = "<group>"; };
+		6B1A8D2D2B156EEF00E76752 /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trio/Sources/Services/LiveActivity/LiveActivityManager.swift; sourceTree = "<group>"; };
 		6BCF84DC2B16843A003AD46E /* LiveActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trio/Sources/Services/LiveActivity/LiveActivityAttributes.swift; sourceTree = "<group>"; };
 		6EFF860E684B4C9488D438DD /* NightscoutImportRoundTripTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NightscoutImportRoundTripTests.swift; sourceTree = "<group>"; };
 		71A58E19DE23455CB842C50C /* CGMSensorStateLogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CGMSensorStateLogTests.swift; sourceTree = "<group>"; };
@@ -3534,7 +3534,6 @@
 				6BCF84DC2B16843A003AD46E /* LiveActivityAttributes.swift */,
 				BDF34F882C10C65E00D51995 /* Data */,
 			);
-			path = LiveActivity;
 			sourceTree = "<group>";
 		};
 		99C01B871ACAB3F32CE755C7 /* PumpConfig */ = {
