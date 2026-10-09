@@ -103,6 +103,13 @@ if File.exist?(pbx_file)
   # This was too aggressive and removed legitimate BuildFiles for the
   # LiveActivityExtension. Correct addition is handled by ensure block + final force.
   puts "EARLY-ATTRIBUTES-NUKE: DISABLED (attributes will be added to extension by later logic)"
+
+# Early explicit removal of the known bad/orphan helper BuildFile (A522...)
+# This UUID has been a persistent source of "cannot be found" because its FileRef was deleted but BuildFile lingered.
+raw.gsub!(/\t\t[0-9A-F]+ \/\* LiveActivityAttributes\+Helper\.swift in Sources \*\/ = \{isa = PBXBuildFile; fileRef = A522228ECDADC08A694CEDD1 [^}]*\};?\s*\n/, '')
+raw.gsub!(/\t\t\t\t[0-9A-F]+ \/\* LiveActivityAttributes\+Helper\.swift in Sources \*\/,\s*\n/, '')
+raw.gsub!(/A522228ECDADC08A694CEDD1 \/\* LiveActivityAttributes\+Helper\.swift \*\/ = \{isa = PBXFileReference; [^}]*\};?\s*\n/, '')
+
 # === EARLY RAW CLEAN (before any potentially crashing gem traversal) ===
 begin
   pbx_early = if ENV["GITHUB_WORKSPACE"]
