@@ -20,6 +20,20 @@ raw.gsub!(/(6B1A8D2C2B156EC100E76752 \/\* LiveActivity \*\/ = \{[^}]*?)path = Li
 raw.gsub!(/(Trio\/Sources\/)+/, 'Trio/Sources/')
 raw.gsub!(/path = "Trio\/Sources\/Trio\/Sources\//, 'path = "Trio/Sources/')
 
+# === ADDITIONAL STRONG FIX: bare relative paths + jam clean for shared LiveActivity group ===
+# Shared group gets path = "LiveActivity" (under Services which has "Trio/Sources/Services")
+# Manager/Attributes get bare names so resolution is Services + LiveActivity/ + basename
+# Clean stray "path = LiveActivity;" lines that appear inside children arrays (jam pattern)
+raw.gsub!(/(6BCF84DC2B16843A003AD46E \/\* LiveActivityAttributes\.swift \*\/ = \{isa = PBXFileReference; lastKnownFileType = sourcecode\.swift; )path = [^;]+;/, '\1path = LiveActivityAttributes.swift;')
+raw.gsub!(/(6B1A8D2D2B156EEF00E76752 \/\* LiveActivityManager\.swift \*\/ = \{isa = PBXFileReference; lastKnownFileType = sourcecode\.swift; )path = [^;]+;/, '\1path = LiveActivityManager.swift;')
+raw.gsub!(/(6B1A8D2C2B156EC100E76752 \/\* LiveActivity \*\/ = \{[^}]*?)(path = LiveActivity;)?(\s*isa = PBXGroup;)/m, '6B1A8D2C2B156EC100E76752 /* LiveActivity */ = {\3
+			path = LiveActivity;')
+raw.gsub!(/(6B1A8D2C2B156EC100E76752 \/\* LiveActivity \*\/,\s*\n)\s*path = LiveActivity;\s*\n/, '\1')
+raw.gsub!(/(,\s*\n)\s*path = LiveActivity;\s*\n(\s*sourceTree = "<group>";)/, '\1\2')
+raw.gsub!(/(Trio\/Sources\/)+/, 'Trio/Sources/')
+raw.gsub!(/(Trio\/){2,}/, 'Trio/')
+puts "Applied bare-path + LiveActivity group jam cleanup (early)"
+
 
 project_path = ENV["GITHUB_WORKSPACE"] ? File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj") : "Trio.xcodeproj"
 puts "Repairing project at #{project_path}"
@@ -504,6 +518,31 @@ project.files.each do |f|
   end
 end
 puts "Path sanitizer fixed #{sanitized} FileReference(s)."
+
+# === FORCE BARE PATHS FOR SHARED LIVEACTIVITY FILES (post-sanitizer) ===
+# Ensure the two shared files use bare names relative to their "LiveActivity" group
+project.files.each do |f|
+  next unless f.path
+  p = f.path.to_s
+  if p.end_with?("LiveActivityAttributes.swift") || p.end_with?("LiveActivityManager.swift")
+    if p != "LiveActivityAttributes.swift" && p != "LiveActivityManager.swift"
+      puts "  Forcing bare path on shared file: #{p} -> #{File.basename(p)}"
+      f.path = File.basename(p)
+    end
+  end
+end
+
+# Ensure the shared LiveActivity group has path = "LiveActivity"
+project.main_group.recursive_children_groups.each do |g|
+  next unless g.name == "LiveActivity" || g.path.to_s.end_with?("LiveActivity")
+  # Only apply to the one that is NOT the widget root one (the one with Manager/Attributes)
+  if g.children.any? { |c| (c.path || "").to_s.include?("Manager") || (c.path || "").to_s.include?("Attributes") }
+    unless g.path == "LiveActivity"
+      puts "  Forcing path = LiveActivity on shared group"
+      g.path = "LiveActivity"
+    end
+  end
+end
 
 # Also clean any group paths that are stacked
 project.main_group.recursive_children_groups.each do |g|
