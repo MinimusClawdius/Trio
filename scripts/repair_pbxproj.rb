@@ -34,6 +34,21 @@ raw.gsub!(/(Trio\/Sources\/)+/, 'Trio/Sources/')
 raw.gsub!(/(Trio\/){2,}/, 'Trio/')
 puts "Applied bare-path + LiveActivity group jam cleanup (early)"
 
+# === FIX SERVICES GROUP PATH AND NORMALIZE FILE REFS (early raw) ===
+# Services group must have relative path "Services" (not "Trio/Sources/Services")
+# to avoid stacking with the outer "Trio" and "Sources" groups.
+# Strip "Trio/Sources/Services/" prefix from FileRef paths so they are relative to the Services group.
+raw.gsub!(/(3811DE9125C9D88200A708ED \/\* Services \*\/ = \{[^}]*?)path = Trio\/Sources\/Services;/, '\1path = Services;')
+raw.gsub!(/path = Trio\/Sources\/Services\//, 'path = ')
+# Ensure the two shared LiveActivity files stay bare
+raw.gsub!(/(6BCF84DC2B16843A003AD46E \/\* LiveActivityAttributes\.swift \*\/ = \{isa = PBXFileReference; lastKnownFileType = sourcecode\.swift; )path = [^;]+;/, '\1path = LiveActivityAttributes.swift;')
+raw.gsub!(/(6B1A8D2D2B156EEF00E76752 \/\* LiveActivityManager\.swift \*\/ = \{isa = PBXFileReference; lastKnownFileType = sourcecode\.swift; )path = [^;]+;/, '\1path = LiveActivityManager.swift;')
+# Clean jams
+raw.gsub!(/(6B1A8D2C2B156EC100E76752 \/\* LiveActivity \*\/,\s*\n)\s*path = [^;]+;\s*\n/, '\1')
+raw.gsub!(/(Trio\/Sources\/)+/, 'Trio/Sources/')
+raw.gsub!(/(Trio\/){2,}/, 'Trio/')
+puts "Applied Services path normalization + FileRef prefix strip (early)"
+
 
 project_path = ENV["GITHUB_WORKSPACE"] ? File.join(ENV["GITHUB_WORKSPACE"], "Trio.xcodeproj") : "Trio.xcodeproj"
 puts "Repairing project at #{project_path}"
@@ -575,7 +590,41 @@ if live_target
   puts "Re-cleaning sources for #{live_target.name}"
   source_phase = live_target.source_build_phase
 
-  # === CRITICAL: Remove any directory "LiveActivity" reference from extension sources ===
+  
+# === FORCE CORRECT SERVICES GROUP PATH AND RELATIVE FILE REFS (post-sanitizer) ===
+project.main_group.recursive_children_groups.each do |g|
+  if g.uuid == "3811DE9125C9D88200A708ED" || (g.name == "Services" && g.path.to_s.include?("Sources/Services"))
+    unless g.path == "Services"
+      puts "  Forcing Services group path to relative 'Services' (was #{g.path})"
+      g.path = "Services"
+    end
+  end
+end
+
+# Normalize FileRefs that still have the old full prefix under Services
+project.files.each do |f|
+  next unless f.path
+  p = f.path.to_s
+  if p.start_with?("Trio/Sources/Services/")
+    newp = p.sub(/^Trio\/Sources\/Services\//, "")
+    puts "  Stripping Services prefix on #{p} -> #{newp}"
+    f.path = newp
+  end
+end
+
+# Re-ensure the two LiveActivity shared files are bare
+project.files.each do |f|
+  next unless f.path
+  if f.path.to_s.end_with?("LiveActivityAttributes.swift") || f.path.to_s.end_with?("LiveActivityManager.swift")
+    base = File.basename(f.path.to_s)
+    if f.path.to_s != base
+      puts "  Forcing bare path on shared LiveActivity file: #{f.path} -> #{base}"
+      f.path = base
+    end
+  end
+end
+
+# === CRITICAL: Remove any directory "LiveActivity" reference from extension sources ===
   # Directory ref + individual files = duplicate compile tasks -> "Multiple commands produce .stringsdata"
   if source_phase
     removed_any = false
