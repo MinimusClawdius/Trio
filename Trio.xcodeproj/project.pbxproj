@@ -1942,7 +1942,7 @@
 		DD868FD72E381A54005D3308 /* APNSJWTClaims.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APNSJWTClaims.swift; sourceTree = "<group>"; };
 		DD88C8E12C50420800F2D558 /* DefinitionRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefinitionRow.swift; sourceTree = "<group>"; };
 		DD906BF32EA6AA0100262772 /* NightscoutUploadPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Network/Nightscout/NightscoutUploadPipeline.swift; sourceTree = "<group>"; };
-		DD906BF52EA6AAE900262772 /* BaseNightscoutManager+Subscribers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/Services/Network/Nightscout/BaseNightscoutManager+Subscribers.swift"; sourceTree = "<group>"; };
+		DD906BF52EA6AAE900262772 /* BaseNightscoutManager+Subscribers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Network/Nightscout/BaseNightscoutManager+Subscribers.swift"; sourceTree = "<group>"; };
 		DD940BA92CA7585D000830A5 /* GlucoseColorScheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlucoseColorScheme.swift; sourceTree = "<group>"; };
 		DD940BAB2CA75889000830A5 /* DynamicGlucoseColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DynamicGlucoseColor.swift; sourceTree = "<group>"; };
 		DD98ACBF2D71013200C0778F /* StatChartUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatChartUtils.swift; sourceTree = "<group>"; };
