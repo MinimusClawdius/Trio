@@ -2643,7 +2643,7 @@
 				3811DEA525C9D88300A708ED /* UnlockManager */,
 				38E87406274F9AA500975559 /* UserNotifications */,
 				38E8754D275556E100975559 /* WatchManager */,
-			3811DE9025C9D88200A708EE /* Network */,,
+			3811DE9025C9D88200A708EE /* Network */,
 				D097EB7E5CC7151F0DEA64F1 /* PebbleManager */,
 				A480A578554304B771FC4682 /* PebbleService */,);
 			path = Services;
@@ -4260,7 +4260,7 @@
 				AABB00012C54389F00211FAC /* TreatmentsSettingsView.swift */,
 				DD1745182C543B5700211FAC /* NotificationsView.swift */,
 				DD17451C2C543C5F00211FAC /* ServicesView.swift */,
-				DD1745362C55B74200211FAC /* AlgorithmSettings.swift */,,
+				DD1745362C55B74200211FAC /* AlgorithmSettings.swift */,
 				3D3CF7FD928F868681C045DA /* PebbleServiceConfigViews.swift */,
 				8A50645241B6FE2FBADD9E4F /* PebbleServiceStartView.swift */,
 );
