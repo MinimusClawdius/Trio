@@ -2,7 +2,7 @@
 """
 Script to add Pebble integration files (and related view files) to the Trio Xcode project.
 Run from Trio repo root.
-It performs text-level insertion of FileReferences, BuildFiles, Groups, and wires them into Services + Subviews groups
+It performs text-level insertion of FileReferences, BuildFiles, Groups, and wires them into Services groups + the Settings View group (for the two top-level view files)
 and the main Sources build phase.
 """
 
@@ -28,7 +28,7 @@ pebble_swift = [
     "Trio/Sources/Services/PebbleService/PebbleService+UI.swift",
 ]
 
-# Additional files that live under Modules/Settings/View (will be added to Subviews group)
+# Additional files that live under Modules/Settings/View (add to the Settings View group, not the Subviews sub-group)
 view_swift = [
     "Trio/Sources/Modules/Settings/View/PebbleServiceConfigViews.swift",
     "Trio/Sources/Modules/Settings/View/PebbleServiceStartView.swift",
@@ -44,6 +44,8 @@ SERVICES_GROUP = "3811DE9125C9D88200A708ED"
 
 # Subviews group ID (under Settings -> View)
 SUBVIEWS_GROUP = "DD1745112C54168300211FAC"
+# Settings View group (parent of Subviews) - the correct place for these two files
+SETTINGS_VIEW_GROUP = "3811DE3B25C9D4A100A708ED"
 
 # Main app sources phase ID
 MAIN_SOURCES = "388E595425AD948C0019842D"
@@ -138,9 +140,9 @@ if end_group != -1:
 else:
     print("ERROR: Could not find End PBXGroup section")
 
-# Add the view files to the Subviews group children
-sub_re = re.compile(rf"({SUBVIEWS_GROUP} /\* Subviews \*/ = \{{[^}}]*?children = \()([^)]*)(\);)", re.DOTALL)
-m = sub_re.search(txt)
+# Add the view files to the correct Settings View group (they live directly under View/, not inside Subviews/)
+view_re = re.compile(rf"({SETTINGS_VIEW_GROUP} /\* View \*/ = \{{[^}}]*?children = \()([^)]*)(\);)", re.DOTALL)
+m = view_re.search(txt)
 if m:
     kids = m.group(2).rstrip()
     if kids and not kids.rstrip().endswith(","):
@@ -150,9 +152,9 @@ if m:
         fname = file_refs[path][1]
         kids += f"\t\t\t\t{fid} /* {fname} */,\n"
     txt = txt[:m.start(2)] + kids + txt[m.end(2):]
-    print("Updated Subviews children with Pebble view files")
+    print("Updated Settings View children with Pebble view files")
 else:
-    print("WARNING: Could not find Subviews group to add view files")
+    print("WARNING: Could not find Settings View group to add view files")
 
 # Add BuildFiles to main Sources phase (robust insertion at start of list)
 phase_marker = MAIN_SOURCES + " /* Sources */ = {"

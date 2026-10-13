@@ -2613,6 +2613,8 @@
 				3811DE3C25C9D4A100A708ED /* SettingsRootView.swift */,
 				CE1F6DE82BAF37C90064EB8D /* TidepoolConfigView.swift */,
 				65070A322BFDCB83006F213F /* TidepoolStartView.swift */,
+				3D3CF7FD928F868681C045DA /* PebbleServiceConfigViews.swift */,
+				8A50645241B6FE2FBADD9E4F /* PebbleServiceStartView.swift */,
 			);
 			path = View;
 			sourceTree = "<group>";
@@ -4261,8 +4263,6 @@
 				DD1745182C543B5700211FAC /* NotificationsView.swift */,
 				DD17451C2C543C5F00211FAC /* ServicesView.swift */,
 				DD1745362C55B74200211FAC /* AlgorithmSettings.swift */,
-				3D3CF7FD928F868681C045DA /* PebbleServiceConfigViews.swift */,
-				8A50645241B6FE2FBADD9E4F /* PebbleServiceStartView.swift */,
 );
 			path = Subviews;
 			sourceTree = "<group>";
