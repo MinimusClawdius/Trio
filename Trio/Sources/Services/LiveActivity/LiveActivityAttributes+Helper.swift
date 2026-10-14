@@ -102,6 +102,9 @@ extension LiveActivityAttributes.ContentState {
         let trendString = bg.direction?.symbol as? String
         let change = Self.calculateChange(chart: chart, units: units)
 
+        let forecastLines: [LiveActivityAttributes.ForecastLine] = (determination?.forecastLines ?? []).map {
+            LiveActivityAttributes.ForecastLine(type: $0.type, values: $0.values)
+        }
         let detailedState = LiveActivityAttributes.ContentAdditionalState(
             chart: chart.map { LiveActivityAttributes.ChartItem(value: Decimal($0.glucose), date: $0.date) },
             rotationDegrees: rotationDegrees,
@@ -111,22 +114,20 @@ extension LiveActivityAttributes.ContentState {
             isOverrideActive: override?.isActive ?? false,
             overrideName: override?.overrideName ?? "Override",
             overrideDate: override?.date ?? Date(),
-            overrideDuration: override?.duration ?? 0,
-            overrideTarget: override?.target ?? 0,
+            overrideDuration: override?.duration ?? 0 as Decimal,
+            overrideTarget: override?.target ?? 0 as Decimal,
             isTempTargetActive: tempTarget?.isActive ?? false,
             tempTargetName: tempTarget?.tempTargetName ?? "Temp Target",
             tempTargetDate: tempTarget?.date ?? Date(),
-            tempTargetDuration: tempTarget?.duration ?? 0,
-            tempTargetTarget: tempTarget?.target ?? 0,
+            tempTargetDuration: tempTarget?.duration ?? 0 as Decimal,
+            tempTargetTarget: tempTarget?.target ?? 0 as Decimal,
             widgetItems: widgetItems ?? [], // set empty array here to silence compiler; this can never be nil
             minForecast: settings.displayGlucoseForecasts && settings.forecastDisplayType == .cone
                 ? (determination?.minForecast ?? []) : [],
             maxForecast: settings.displayGlucoseForecasts && settings.forecastDisplayType == .cone
                 ? (determination?.maxForecast ?? []) : [],
             forecastLines: settings.displayGlucoseForecasts && settings.forecastDisplayType == .lines
-                ? (determination?.forecastLines ?? [])
-                .map { LiveActivityAttributes.ForecastLine(type: $0.type, values: $0.values) }
-                : [],
+                ? forecastLines : [],
             forecastDisplayType: settings.forecastDisplayType.rawValue
         )
 
