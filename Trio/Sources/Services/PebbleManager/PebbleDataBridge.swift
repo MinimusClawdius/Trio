@@ -40,7 +40,7 @@ final class PebbleDataBridge {
     private var maxCarbs: Decimal = 250.0
     private var units: String = "mgdL"
     private var stateDate: Date?
-    private var pumpReservoirUnits: Double?
+    private var pumpReservoirUnits: Decimal?
     private var pumpBatteryPercent: Int?
 
     private let isoFormatter: ISO8601DateFormatter = {
@@ -134,11 +134,13 @@ final class PebbleDataBridge {
         defer { lock.unlock() }
 
         let res: String
-        if let u = pumpReservoirUnits, u.isFinite, u >= 0 {
-            if u.rounded() == u {
-                res = "\(Int(u.rounded()))"
+        if let u = pumpReservoirUnits, u >= 0 {
+            let num = NSDecimalNumber(decimal: u)
+            let dbl = num.doubleValue
+            if dbl == dbl.rounded() {
+                res = "\(num.intValue)"
             } else {
-                res = String(format: "%.1f", u)
+                res = String(format: "%.1f", dbl)
             }
         } else {
             res = "null"

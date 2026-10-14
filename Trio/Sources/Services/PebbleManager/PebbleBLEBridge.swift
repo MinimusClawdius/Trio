@@ -285,9 +285,13 @@ final class PebbleBLEBridge: NSObject {
         }
 
         // Pump reservoir / battery (watch C layer treats reservoir as int8 in places — clamp for BLE)
-        if let r = state.pumpReservoirUnits, r.isFinite, r >= 0 {
-            let clipped = min(127, max(0, Int(r.rounded())))
-            msg[K.reservoir.nsKey] = NSNumber(value: Int32(clipped))
+        if let r = state.pumpReservoirUnits, r >= 0 {
+            let num = NSDecimalNumber(decimal: r)
+            let dbl = num.doubleValue
+            if dbl.isFinite {
+                let clipped = min(127, max(0, Int(dbl.rounded())))
+                msg[K.reservoir.nsKey] = NSNumber(value: Int32(clipped))
+            }
         }
         if let pct = state.pumpBatteryPercent {
             msg[K.pumpBattery.nsKey] = NSNumber(value: Int32(min(100, max(0, pct))))
