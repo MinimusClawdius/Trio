@@ -27,6 +27,10 @@ struct WatchState: Hashable, Equatable, Sendable, Encodable, Decodable {
     var bolusIncrement: Decimal = 0.05
     var confirmBolusFaster: Bool = false
 
+    // Pump status (populated for Pebble / legacy watch faces)
+    var pumpReservoirUnits: Decimal?
+    var pumpBatteryPercent: Int?
+
     // Forecast options
     var showForecast: Bool = false
     var isForecastCone: Bool = false
@@ -58,6 +62,8 @@ struct WatchState: Hashable, Equatable, Sendable, Encodable, Decodable {
             lhs.maxProtein == rhs.maxProtein &&
             lhs.bolusIncrement == rhs.bolusIncrement &&
             lhs.confirmBolusFaster == rhs.confirmBolusFaster &&
+            lhs.pumpReservoirUnits == rhs.pumpReservoirUnits &&
+            lhs.pumpBatteryPercent == rhs.pumpBatteryPercent &&
             lhs.showForecast == rhs.showForecast &&
             lhs.isForecastCone == rhs.isForecastCone &&
             lhs.forecastStartDate == rhs.forecastStartDate &&
@@ -90,6 +96,8 @@ struct WatchState: Hashable, Equatable, Sendable, Encodable, Decodable {
         hasher.combine(maxProtein)
         hasher.combine(bolusIncrement)
         hasher.combine(confirmBolusFaster)
+        hasher.combine(pumpReservoirUnits)
+        hasher.combine(pumpBatteryPercent)
         hasher.combine(showForecast)
         hasher.combine(isForecastCone)
         hasher.combine(forecastStartDate)
