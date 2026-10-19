@@ -27,6 +27,7 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
     @Injected() private var bolusCalculationManager: BolusCalculationManager!
     @Injected() private var iobService: IOBService!
     @Injected() private var notificationsManager: UserNotificationsManager!
+    @Injected() private var pebbleManager: PebbleManager!
 
     private var units: GlucoseUnits = .mgdL
     private var glucoseColorScheme: GlucoseColorScheme = .staticColor
@@ -77,6 +78,7 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
                 Task {
                     let state = await self.setupWatchState()
                     await self.sendDataToWatch(state)
+                    self.pebbleManager?.sendState(state)
                 }
             }
             .store(in: &subscriptions)
@@ -88,6 +90,7 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
                 Task {
                     let state = await self.setupWatchState()
                     await self.sendDataToWatch(state)
+                    self.pebbleManager?.sendState(state)
                 }
             }
             .store(in: &subscriptions)
@@ -103,6 +106,7 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
             Task {
                 let state = await self.setupWatchState()
                 await self.sendDataToWatch(state)
+                self.pebbleManager?.sendState(state)
             }
         }.store(in: &subscriptions)
 
@@ -114,6 +118,7 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
             Task {
                 let state = await self.setupWatchState()
                 await self.sendDataToWatch(state)
+                self.pebbleManager?.sendState(state)
             }
         }.store(in: &subscriptions)
 
@@ -131,6 +136,7 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
             Task {
                 let state = await self.setupWatchState()
                 await self.sendDataToWatch(state)
+                self.pebbleManager?.sendState(state)
             }
         }.store(in: &subscriptions)
 
@@ -141,6 +147,7 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
             Task {
                 let state = await self.setupWatchState()
                 await self.sendDataToWatch(state)
+                self.pebbleManager?.sendState(state)
             }
         }.store(in: &subscriptions)
     }
@@ -639,6 +646,7 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
         Task {
             let state = await self.setupWatchState()
             await self.sendDataToWatch(state)
+            self.pebbleManager?.sendState(state)
         }
     }
 
@@ -661,6 +669,7 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
                 Task {
                     let state = await self.setupWatchState()
                     await self.sendDataToWatch(state)
+                    self.pebbleManager?.sendState(state)
                 }
                 return
             }
@@ -812,6 +821,7 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
             Task {
                 let state = await self.setupWatchState()
                 await self.sendDataToWatch(state)
+                self.pebbleManager?.sendState(state)
             }
         } else {
             // Try to reconnect after a short delay
@@ -1087,6 +1097,7 @@ extension BaseWatchManager: SettingsObserver, PumpSettingsObserver {
         Task {
             let state = await self.setupWatchState()
             await self.sendDataToWatch(state)
+            self.pebbleManager?.sendState(state)
         }
     }
 
@@ -1103,6 +1114,7 @@ extension BaseWatchManager: SettingsObserver, PumpSettingsObserver {
         Task {
             let state = await self.setupWatchState()
             await self.sendDataToWatch(state)
+            self.pebbleManager?.sendState(state)
         }
     }
 }

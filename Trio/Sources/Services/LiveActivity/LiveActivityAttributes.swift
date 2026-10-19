@@ -4,19 +4,32 @@ import Foundation
 struct LiveActivityAttributes: ActivityAttributes {
     enum LiveActivityItem: String, Hashable, Codable, Equatable {
         case currentGlucoseLarge
+        case currentGlucoseLargeUncolored
         case currentGlucose
+        case currentGlucoseColored
+        case currentGlucoseWide
+        case currentGlucoseWideUncolored
         case iob
         case cob
         case updatedLabel
         case totalDailyDose
         case empty
+        case wideContinuation
 
         static let defaultItems: [Self] = [.currentGlucoseLarge, .iob, .cob, .updatedLabel]
+    }
+
+    struct SimpleViewStyle: Codable, Hashable {
+        let fontSize: LiveActivityFontSize
+
+        static let `default` = SimpleViewStyle(fontSize: .large)
     }
 
     struct ContentState: Codable, Hashable {
         let unit: String
         let bg: String
+        /// Latest glucose reading in mg/dL; nil when no reading is shown.
+        let glucose: Decimal?
         let direction: String?
         let change: String
         let date: Date?
@@ -26,6 +39,7 @@ struct LiveActivityAttributes: ActivityAttributes {
         let glucoseColorScheme: String
         let useDetailedViewIOS: Bool
         let useDetailedViewWatchOS: Bool
+        let simpleViewStyle: SimpleViewStyle
         let detailedViewState: ContentAdditionalState
 
         /// true for the first state that is set on the activity
