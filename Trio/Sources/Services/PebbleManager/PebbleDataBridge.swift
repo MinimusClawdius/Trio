@@ -73,7 +73,7 @@ final class PebbleDataBridge {
 
         stateRevision &+= 1
 
-        PebbleIntegrationFileLogger.log("data", "updateFromWatchState cgm=\(currentGlucose ?? "nil") iob=\(iob ?? "nil") res=\(pumpReservoirUnits?.description ?? "nil") hist=\(glucoseValues.count) rev=\(stateRevision)")
+        PebbleIntegrationFileLogger.log("data", "updateFromWatchState cgm=\(currentGlucose ?? \"nil\") iob=\(iob ?? \"nil\") res=\(pumpReservoirUnits?.description ?? \"nil\") hist=\(glucoseValues.count) rev=\(stateRevision)")
         PebbleIntegrationFileLogger.log("data", "updateFromWatchState cgm=\(currentGlucose ?? "nil") iob=\(iob ?? "nil") res=\(pumpReservoirUnits?.description ?? "nil") hist=\(glucoseValues.count) rev=\(stateRevision)")
     }
 
