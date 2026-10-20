@@ -72,12 +72,12 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
             .receive(on: DispatchQueue.global(qos: .background))
             .sink { [weak self] _ in
                 guard let self = self else { return }
-                // Skip if no watch is paired or app not installed
-                guard let session = self.session, session.isPaired, session.isReachable,
-                      session.isWatchAppInstalled else { return }
+                let hasWatch = self.session?.isPaired == true && self.session?.isReachable == true && self.session?.isWatchAppInstalled == true
                 Task {
                     let state = await self.setupWatchState()
-                    await self.sendDataToWatch(state)
+                    if hasWatch {
+                        await self.sendDataToWatch(state)
+                    }
                     self.pebbleManager?.sendState(state)
                 }
             }
@@ -87,9 +87,12 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
             .receive(on: DispatchQueue.global(qos: .background))
             .sink { [weak self] _ in
                 guard let self = self else { return }
+                let hasWatch = self.session?.isPaired == true && self.session?.isReachable == true && self.session?.isWatchAppInstalled == true
                 Task {
                     let state = await self.setupWatchState()
-                    await self.sendDataToWatch(state)
+                    if hasWatch {
+                        await self.sendDataToWatch(state)
+                    }
                     self.pebbleManager?.sendState(state)
                 }
             }
@@ -101,11 +104,12 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
     private func registerHandlers() {
         coreDataPublisher?.filteredByEntityName("OrefDetermination").sink { [weak self] _ in
             guard let self = self else { return }
-            // Skip if no watch is paired or app not installed
-            guard let session = self.session, session.isPaired, session.isReachable, session.isWatchAppInstalled else { return }
+            let hasWatch = self.session?.isPaired == true && self.session?.isReachable == true && self.session?.isWatchAppInstalled == true
             Task {
                 let state = await self.setupWatchState()
-                await self.sendDataToWatch(state)
+                if hasWatch {
+                    await self.sendDataToWatch(state)
+                }
                 self.pebbleManager?.sendState(state)
             }
         }.store(in: &subscriptions)
@@ -113,11 +117,12 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
         // Due to the Batch insert this only is used for observing Deletion of Glucose entries
         coreDataPublisher?.filteredByEntityName("GlucoseStored").sink { [weak self] _ in
             guard let self = self else { return }
-            // Skip if no watch is paired or app not installed
-            guard let session = self.session, session.isPaired, session.isReachable, session.isWatchAppInstalled else { return }
+            let hasWatch = self.session?.isPaired == true && self.session?.isReachable == true && self.session?.isWatchAppInstalled == true
             Task {
                 let state = await self.setupWatchState()
-                await self.sendDataToWatch(state)
+                if hasWatch {
+                    await self.sendDataToWatch(state)
+                }
                 self.pebbleManager?.sendState(state)
             }
         }.store(in: &subscriptions)
@@ -131,22 +136,24 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
 
         coreDataPublisher?.filteredByEntityName("OverrideStored").sink { [weak self] _ in
             guard let self = self else { return }
-            // Skip if no watch is paired or app not installed
-            guard let session = self.session, session.isPaired, session.isReachable, session.isWatchAppInstalled else { return }
+            let hasWatch = self.session?.isPaired == true && self.session?.isReachable == true && self.session?.isWatchAppInstalled == true
             Task {
                 let state = await self.setupWatchState()
-                await self.sendDataToWatch(state)
+                if hasWatch {
+                    await self.sendDataToWatch(state)
+                }
                 self.pebbleManager?.sendState(state)
             }
         }.store(in: &subscriptions)
 
         coreDataPublisher?.filteredByEntityName("TempTargetStored").sink { [weak self] _ in
             guard let self = self else { return }
-            // Skip if no watch is paired or app not installed
-            guard let session = self.session, session.isPaired, session.isReachable, session.isWatchAppInstalled else { return }
+            let hasWatch = self.session?.isPaired == true && self.session?.isReachable == true && self.session?.isWatchAppInstalled == true
             Task {
                 let state = await self.setupWatchState()
-                await self.sendDataToWatch(state)
+                if hasWatch {
+                    await self.sendDataToWatch(state)
+                }
                 self.pebbleManager?.sendState(state)
             }
         }.store(in: &subscriptions)
@@ -179,38 +186,41 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
     /// Prepares the current state data to be sent to the Watch
     /// - Returns: WatchState containing current glucose readings and trends and determination infos for displaying cob and iob in the view
     func setupWatchState() async -> WatchState {
-        // Check if a watch is paired and reachable before doing expensive calculations
-        guard let session = session, session.isPaired, session.isReachable, session.isWatchAppInstalled else {
-            debug(.watchManager, "⌚️❌ Skipping setupWatchState - No Watch is paired or app not installed")
-            return WatchState(date: Date())
+        // Data is now always collected (needed by Pebble even when no Apple Watch is paired).
+        // We log but no longer early-return an empty state for missing watch.
+        if let s = session, !(s.isPaired && s.isReachable && s.isWatchAppInstalled) {
+            debug(.watchManager, "⌚️ No Apple Watch paired/reachable — still building rich state for Pebble etc.")
         }
-
-        // Skip if watch session is not activated
-        guard session.activationState == .activated else {
-            debug(.watchManager, "⌚️❌ Skipping setupWatchState - Watch session not activated")
-            return WatchState(date: Date())
+        if let s = session, s.activationState != .activated {
+            debug(.watchManager, "⌚️ Watch session not activated — proceeding for Pebble data anyway")
         }
         do {
             let context = CoreDataStack.shared.newTaskContext()
             context.name = "setupWatchState"
 
-            // Get NSManagedObjectIDs
-            let glucoseIds = try await fetchGlucose()
-            let determinationIds = try await determinationStorage.fetchLastDeterminationObjectID(
-                predicate: NSPredicate.predicateFor30MinAgoForDetermination
-            )
-            let overridePresetIds = try await overrideStorage.fetchForOverridePresets()
-            let tempTargetPresetIds = try await tempTargetStorage.fetchForTempTargetPresets()
+            // Get NSManagedObjectIDs (tolerate failures so Pebble/HTTP always gets IOB + partial state)
+            var glucoseIds: [NSManagedObjectID] = []
+            var determinationIds: [NSManagedObjectID] = []
+            var overridePresetIds: [NSManagedObjectID] = []
+            var tempTargetPresetIds: [NSManagedObjectID] = []
+            do { glucoseIds = try await fetchGlucose() } catch { debug(.watchManager, "Pebble: glucose fetch failed: \(error)") }
+            do {
+                determinationIds = try await determinationStorage.fetchLastDeterminationObjectID(
+                    predicate: NSPredicate.predicateFor30MinAgoForDetermination
+                )
+            } catch { debug(.watchManager, "Pebble: determination fetch failed: \(error)") }
+            do { overridePresetIds = try await overrideStorage.fetchForOverridePresets() } catch {}
+            do { tempTargetPresetIds = try await tempTargetStorage.fetchForTempTargetPresets() } catch {}
 
-            // Get NSManagedObjects
-            let glucoseObjects: [GlucoseStored] = try await CoreDataStack.shared
-                .getNSManagedObject(with: glucoseIds, context: context)
-            let determinationObjects: [OrefDetermination] = try await CoreDataStack.shared
-                .getNSManagedObject(with: determinationIds, context: context)
-            let overridePresetObjects: [OverrideStored] = try await CoreDataStack.shared
-                .getNSManagedObject(with: overridePresetIds, context: context)
-            let tempTargetPresetObjects: [TempTargetStored] = try await CoreDataStack.shared
-                .getNSManagedObject(with: tempTargetPresetIds, context: context)
+            // Get NSManagedObjects (tolerate empty lists)
+            let glucoseObjects: [GlucoseStored] = (try? await CoreDataStack.shared
+                .getNSManagedObject(with: glucoseIds, context: context)) ?? []
+            let determinationObjects: [OrefDetermination] = (try? await CoreDataStack.shared
+                .getNSManagedObject(with: determinationIds, context: context)) ?? []
+            let overridePresetObjects: [OverrideStored] = (try? await CoreDataStack.shared
+                .getNSManagedObject(with: overridePresetIds, context: context)) ?? []
+            let tempTargetPresetObjects: [TempTargetStored] = (try? await CoreDataStack.shared
+                .getNSManagedObject(with: tempTargetPresetIds, context: context)) ?? []
 
             return await context.perform {
                 var watchState = WatchState(date: Date())
@@ -223,7 +233,7 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
                     watchState.lastLoopTime = "\(lastLoopMinutes) min"
                 }
 
-                // Set IOB and COB from latest determination
+                // Set IOB (always, from service) and COB (from determination if present)
                 let iob = self.iobService.currentIOB ?? 0
                 watchState.iob = Formatter.decimalFormatterWithTwoFractionDigits.string(from: iob as NSNumber)
 
@@ -240,7 +250,15 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
                     )
                 }
 
+                // Pump reservoir for Pebble /api/all (best effort; many pumps write to monitor/reservoir.json)
+                if let res: Decimal = try? await self.fileStorage.retrieveAsync("monitor/reservoir.json", as: Decimal.self) {
+                    watchState.pumpReservoirUnits = res
+                }
+
                 guard let latestGlucose = glucoseObjects.first else {
+                    // No recent glucose in the last 24h — return partial state (IOB, COB, lastLoop, presets, reservoir).
+                    // Glucose/cgm fields and history will be null/empty until new CGM data arrives and a publisher fires.
+                    debug(.watchManager, "📱 Pebble setupWatchState: no recent GlucoseStored — glucose will be null until next reading")
                     return watchState
                 }
 
@@ -444,8 +462,14 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
                 .watchManager,
                 "\(DebuggingIdentifiers.failed) Error setting up watch state: \(error)"
             )
-            // Return empty state in case of error
-            return WatchState(date: Date())
+            // Return a minimal usable state for Pebble (at least try IOB)
+            var fallback = WatchState(date: Date())
+            let iob = self.iobService.currentIOB ?? 0
+            fallback.iob = Formatter.decimalFormatterWithTwoFractionDigits.string(from: iob as NSNumber)
+            if let res: Decimal = try? await self.fileStorage.retrieveAsync("monitor/reservoir.json", as: Decimal.self) {
+                fallback.pumpReservoirUnits = res
+            }
+            return fallback
         }
     }
 
@@ -454,12 +478,17 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
     private func fetchGlucose() async throws -> [NSManagedObjectID] {
         let context = CoreDataStack.shared.newTaskContext()
         context.name = "fetchGlucose"
+        // For Pebble/HTTP we prefer any recent data over strict 24h (last known CGM > null).
+        // Last ~7 days + limit to 48 for history; still sorted newest first.
+        let sevenDaysAgo = Date().addingTimeInterval(-7 * 24 * 3600)
+        let predicate = NSPredicate(format: "date >= %@", sevenDaysAgo as NSDate)
         let results = try await CoreDataStack.shared.fetchEntitiesAsync(
             ofType: GlucoseStored.self,
             onContext: context,
-            predicate: NSPredicate.glucose,
+            predicate: predicate,
             key: "date",
-            ascending: false
+            ascending: false,
+            fetchLimit: 48
         )
 
         return try await context.perform {
@@ -642,10 +671,13 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
         debug(.watchManager, "📱 Phone session activated with state: \(activationState.rawValue)")
         debug(.watchManager, "📱 Phone isReachable after activation: \(session.isReachable)")
 
-        // Try to send initial data after activation
+        // Try to send initial data after activation (Pebble always, Apple Watch only if present)
+        let hasWatch = self.session?.isPaired == true && self.session?.isReachable == true && self.session?.isWatchAppInstalled == true
         Task {
             let state = await self.setupWatchState()
-            await self.sendDataToWatch(state)
+            if hasWatch {
+                await self.sendDataToWatch(state)
+            }
             self.pebbleManager?.sendState(state)
         }
     }
@@ -663,12 +695,12 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
                requestWatchUpdate == WatchMessageKeys.watchState
             {
                 debug(.watchManager, "📱 Watch requested watch state data update.")
-                // Skip if no watch is paired or app not installed
-                guard let session = self.session, session.isPaired, session.isReachable,
-                      session.isWatchAppInstalled else { return }
+                let hasWatch = self.session?.isPaired == true && self.session?.isReachable == true && self.session?.isWatchAppInstalled == true
                 Task {
                     let state = await self.setupWatchState()
-                    await self.sendDataToWatch(state)
+                    if hasWatch {
+                        await self.sendDataToWatch(state)
+                    }
                     self.pebbleManager?.sendState(state)
                 }
                 return
@@ -817,10 +849,13 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
         debug(.watchManager, "📱 Phone reachability changed: \(session.isReachable)")
 
         if session.isReachable {
-            // Try to send data when connection is established
+            // Try to send data when connection is established (Pebble always gets it)
+            let hasWatch = self.session?.isPaired == true && self.session?.isReachable == true && self.session?.isWatchAppInstalled == true
             Task {
                 let state = await self.setupWatchState()
-                await self.sendDataToWatch(state)
+                if hasWatch {
+                    await self.sendDataToWatch(state)
+                }
                 self.pebbleManager?.sendState(state)
             }
         } else {
@@ -1092,11 +1127,12 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
 extension BaseWatchManager: SettingsObserver, PumpSettingsObserver {
     // to update maxBolus
     func pumpSettingsDidChange(_: PumpSettings) {
-        // Skip if no watch is paired or app not installed
-        guard let session = self.session, session.isPaired, session.isReachable, session.isWatchAppInstalled else { return }
+        let hasWatch = self.session?.isPaired == true && self.session?.isReachable == true && self.session?.isWatchAppInstalled == true
         Task {
             let state = await self.setupWatchState()
-            await self.sendDataToWatch(state)
+            if hasWatch {
+                await self.sendDataToWatch(state)
+            }
             self.pebbleManager?.sendState(state)
         }
     }
@@ -1108,12 +1144,13 @@ extension BaseWatchManager: SettingsObserver, PumpSettingsObserver {
         lowGlucose = settingsManager.settings.low
         highGlucose = settingsManager.settings.high
 
-        // Skip if no watch is paired or app not installed
-        guard let session = self.session, session.isPaired, session.isReachable, session.isWatchAppInstalled else { return }
+        let hasWatch = self.session?.isPaired == true && self.session?.isReachable == true && self.session?.isWatchAppInstalled == true
 
         Task {
             let state = await self.setupWatchState()
-            await self.sendDataToWatch(state)
+            if hasWatch {
+                await self.sendDataToWatch(state)
+            }
             self.pebbleManager?.sendState(state)
         }
     }

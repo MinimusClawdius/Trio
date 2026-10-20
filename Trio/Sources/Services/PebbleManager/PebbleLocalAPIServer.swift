@@ -77,6 +77,8 @@ final class PebbleLocalAPIServer {
     private let commandManager: PebbleCommandManager
     /// Optional carb → bolus recommendation (same engine as Apple Watch); used by `GET /api/pebble/v1/bolus_recommendation`.
     private let recommendBolusForCarbsGrams: ((Double) async -> Decimal)?
+    /// Called on data requests when current snapshot has nulls — gives the manager a chance to re-seed fresh WatchState.
+    private let refreshAction: (() -> Void)?
     private let lifecycleQueue = DispatchQueue(label: "trio.pebble.http.lifecycle")
     private var restartWorkItem: DispatchWorkItem?
     private var keepAliveTaskID: UIBackgroundTaskIdentifier = .invalid
@@ -89,12 +91,14 @@ final class PebbleLocalAPIServer {
         dataBridge: PebbleDataBridge,
         commandManager: PebbleCommandManager,
         port: UInt16 = 8080,
-        recommendBolusForCarbsGrams: ((Double) async -> Decimal)? = nil
+        recommendBolusForCarbsGrams: ((Double) async -> Decimal)? = nil,
+        refreshAction: (() -> Void)? = nil
     ) {
         self.dataBridge = dataBridge
         self.commandManager = commandManager
         self.port = port
         self.recommendBolusForCarbsGrams = recommendBolusForCarbsGrams
+        self.refreshAction = refreshAction
     }
 
     deinit { stop() }
@@ -557,7 +561,12 @@ final class PebbleLocalAPIServer {
             case "/api/loop": return (200, "application/json", dataBridge.loopJSON())
             case "/api/pump": return (200, "application/json", dataBridge.pumpJSON())
             case "/api/all", "/api/pebble/v1/snapshot":
-                return (200, "application/json", dataBridge.allDataJSON())
+                refreshAction?()  // always poke for fresh IOB/CGM/reservoir on snapshot requests
+                let json = dataBridge.allDataJSON()
+                if json.contains("\"glucose\":null") || json.contains("\"iob\":null") || json.contains("\"reservoir\":null") {
+                    PebbleIntegrationFileLogger.log("http_get", "serving /api/all (after refresh poke) still has some nulls — need a CGM reading or determination in Core Data")
+                }
+                return (200, "application/json", json)
             case "/api/commands/pending": return (200, "application/json", commandManager.pendingCommandsJSON())
             case "/api/pebble/v1/bolus_recommendation":
                 return handleBolusRecommendationGet(query: query)

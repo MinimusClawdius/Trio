@@ -12,6 +12,7 @@ protocol PebbleManager {
     var useNativeBLEPush: Bool { get set }
     func start()
     func stop()
+    func refreshState()
 }
 
 /// Pebble / Rebble integration:
@@ -28,6 +29,7 @@ final class BasePebbleManager: PebbleManager, Injectable {
     @Injected() private var bolusCalculationManager: BolusCalculationManager!
     @Injected() private var apsManager: APSManager!
     @Injected() private var determinationStorage: DeterminationStorage!
+    @Injected() private var watchManager: WatchManager!
 
     @Persisted(key: "BasePebbleManager.isEnabled") var isEnabled: Bool = false {
         didSet {
@@ -98,7 +100,8 @@ final class BasePebbleManager: PebbleManager, Injectable {
             recommendBolusForCarbsGrams: { [weak self] grams in
                 guard let self else { return 0 }
                 return await self.pebbleRecommendedBolusUnits(forCarbsGrams: grams)
-            }
+            },
+            refreshAction: { [weak self] in self?.refreshState() }
         )
         apiServer = server
         server.start()
@@ -124,6 +127,16 @@ final class BasePebbleManager: PebbleManager, Injectable {
         }
         debug(.service, "Pebble: integration started — HTTP on port \(port), \(bleStatus)")
         PebbleIntegrationFileLogger.log("manager", "start HTTP :\(port) \(bleStatus)")
+
+        // Seed initial rich state immediately for Pebble/HTTP (so /api/all etc. have glucose/IOB
+        // even if no new Core Data change has fired since the service was enabled).
+        Task { [weak self] in
+            guard let self else { return }
+            let state = await self.watchManager.setupWatchState()
+            self.sendState(state)
+            PebbleIntegrationFileLogger.log("data", "initial seed in start() cgm=\(state.currentGlucose ?? \"nil\") iob=\(state.iob ?? \"nil\")")
+            debug(.service, "Pebble: seeded initial state for HTTP API (glucose/iob/etc.)")
+        }
     }
 
     func stop() {
@@ -149,6 +162,15 @@ final class BasePebbleManager: PebbleManager, Injectable {
 
         if useNativeBLEPush {
             bleBridge.sendState(state)
+        }
+    }
+
+    func refreshState() {
+        Task { [weak self] in
+            guard let self else { return }
+            let state = await self.watchManager.setupWatchState()
+            self.sendState(state)
+            PebbleIntegrationFileLogger.log("data", "refreshState seeded — cgm=\(state.currentGlucose ?? \"nil\") iob=\(state.iob ?? \"nil\") cob=\(state.cob ?? \"nil\") res=\(state.pumpReservoirUnits?.description ?? \"nil\") hist=\(state.glucoseValues.count)")
         }
     }
 

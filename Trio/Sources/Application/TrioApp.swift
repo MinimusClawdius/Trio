@@ -415,7 +415,9 @@ extension Notification.Name {
                     rootVC.excludeKeyboardFromSafeAreaTree()
                     AppVersionChecker.shared.checkAndNotifyVersionStatus(in: rootVC)
                 }
-                presentDevelopmentBranchWarningIfNeeded()
+                // Do NOT re-present the dev-branch warning on every foreground activation.
+                // It is shown on cold launch (via loading/splash changes) and stays suppressed
+                // once acknowledged (persisted flag). Background switches no longer re-trigger it.
                 if initState.complete {
                     performCleanupIfNecessary()
                 }

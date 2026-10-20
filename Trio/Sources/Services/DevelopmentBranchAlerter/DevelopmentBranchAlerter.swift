@@ -30,8 +30,12 @@ import SwiftUI
     /// Branch the running build came from, resolved when the warning is raised.
     private(set) var branch = ""
 
-    /// Reset with the process, so every launch warns again as Loop's does.
-    private var hasBeenAcknowledgedThisLaunch = false
+    /// Persisted acknowledgment so the warning does not re-appear on every app activation / background switch.
+    /// Once the user taps "I'm a Tester", it stays suppressed across launches (delete the UserDefaults key to re-enable).
+    private var hasBeenAcknowledged: Bool {
+        get { UserDefaults.standard.bool(forKey: "devBranchWarningAcknowledged") }
+        set { UserDefaults.standard.set(newValue, forKey: "devBranchWarningAcknowledged") }
+    }
 
     // MARK: - Public
 
@@ -40,7 +44,7 @@ import SwiftUI
         #if DEV_BRANCH_WARNING_DISABLED
             return
         #else
-            guard !hasBeenAcknowledgedThisLaunch else {
+            guard !hasBeenAcknowledged else {
                 return
             }
 
@@ -54,12 +58,11 @@ import SwiftUI
         #endif
     }
 
-    /// Marks the warning as dealt with for this launch.
+    /// Marks the warning as dealt with (persisted).
     ///
-    /// Called when the user dismisses the alert, so that a request which never reached the screen
-    /// is not counted as one the user actually saw.
+    /// Called when the user taps a button on the alert.
     func acknowledge() {
-        hasBeenAcknowledgedThisLaunch = true
+        hasBeenAcknowledged = true
     }
 
     /// Warning body for the branch this build came from.

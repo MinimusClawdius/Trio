@@ -72,6 +72,25 @@ struct PebbleServiceFormView: View {
                     .multilineTextAlignment(.trailing)
                     .frame(maxWidth: 80)
                 }
+
+                if service.isEnabled {
+                    Link(destination: URL(string: "http://127.0.0.1:\(service.httpPort)/api/all")!) {
+                        HStack {
+                            Text("Quick check: open /api/all in Safari")
+                            Image(systemName: "safari")
+                        }
+                    }
+                    .foregroundStyle(.blue)
+                    .font(.callout)
+
+                    Button {
+                        if let mgr = pebbleManager {
+                            mgr.refreshState()
+                        }
+                    } label: {
+                        Text("Force refresh Pebble data (re-seed IOB/CGM)")
+                    }
+                }
             } header: {
                 Text(String(localized: "Connection", comment: "Pebble service section header"))
             } footer: {
@@ -283,7 +302,7 @@ struct PebbleServiceFormView: View {
         }
         return String(
             localized:
-            "Official PebbleKit iOS 4.0 (2016) does not build on current Xcode, so App Store / CI builds ship HTTP-only. The toggle is kept for future Rebble/community SDKs; with this binary it cannot open a native BLE data path. Battery: keep-alive for HTTP is adaptive (background + recent polls only).",
+            "Official PebbleKit iOS 4.0 (2016) does not build on current Xcode, so App Store / CI builds ship HTTP-only. The toggle is kept for future Rebble/community SDKs; with this binary it cannot open a native BLE data path. To restore native BLE: manually add an old PebbleKit.framework (from pre-1.0 Trio build or the pebble-ios-sdk GitHub repo) into the Pebble target (link binary + copy bundle), ensure the watchface UUID matches trio-pebble, and rebuild locally. The bridge + buildAppMessage + delegate code is already fully restored and matches the JS path. Prefer the JS+HTTP path for reliability. Battery: keep-alive for HTTP is adaptive (background + recent polls only).",
             comment: "Pebble BLE footer when SDK missing"
         )
     }
