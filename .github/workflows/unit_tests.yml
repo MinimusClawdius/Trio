@@ -27,12 +27,19 @@ concurrency:
 jobs:
   algorithm-package:
     name: Algorithm Package (swift test)
-    runs-on: macos-26
+    runs-on: macos-latest
     if: github.repository_owner == 'nightscout'
 
     steps:
       - name: Select Xcode version
-        run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
+        run: |
+          if [ -d "/Applications/Xcode_26.2.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
+          elif [ -d "/Applications/Xcode_26.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_26.app/Contents/Developer
+          else
+            echo "Using default Xcode"
+          fi
 
       - name: Checkout code
         uses: actions/checkout@v5
@@ -85,7 +92,7 @@ jobs:
 
   test:
     name: Run Unit Tests
-    runs-on: macos-26
+    runs-on: macos-latest
     if: github.repository_owner == 'nightscout'
 
     env:
@@ -101,7 +108,14 @@ jobs:
 
     steps:
       - name: Select Xcode version
-        run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
+        run: |
+          if [ -d "/Applications/Xcode_26.2.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
+          elif [ -d "/Applications/Xcode_26.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_26.app/Contents/Developer
+          else
+            echo "Using default Xcode"
+          fi
 
       - name: Checkout code
         uses: actions/checkout@v5

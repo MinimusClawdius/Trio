@@ -189,7 +189,7 @@ jobs:
   build:
     name: Build
     needs: [check_certs, check_status]
-    runs-on: macos-26
+    runs-on: macos-latest
     permissions:
       contents: write
     if:
@@ -199,7 +199,15 @@ jobs:
         (vars.SCHEDULED_SYNC != 'false' && needs.check_status.outputs.NEW_COMMITS == 'true' )
     steps:
       - name: Select Xcode version
-        run: "sudo xcode-select --switch /Applications/Xcode_26.5.app/Contents/Developer"
+        run: |
+          # Prefer Xcode 26.x if present (newer toolchain), fall back to default
+          if [ -d "/Applications/Xcode_26.5.app" ]; then
+            sudo xcode-select --switch /Applications/Xcode_26.5.app/Contents/Developer
+          elif [ -d "/Applications/Xcode_26.app" ]; then
+            sudo xcode-select --switch /Applications/Xcode_26.app/Contents/Developer
+          else
+            echo "Using default Xcode: $(xcode-select -p)"
+          fi
       
       - name: Checkout Repo for building
         uses: actions/checkout@v5
