@@ -33,13 +33,13 @@ struct LiveActivityUpdatedLabelView: View {
                     .foregroundStyle(context.isStale ? .red.opacity(0.6) : .primary)
                     .strikethrough(context.isStale, pattern: .solid, color: .red.opacity(0.6))
 
-                Text("Updated")
+                Text("Last")
                     .font(.subheadline)
                     .foregroundStyle(.primary)
             }
         } else {
             HStack {
-                Text("Updated:")
+                Text("Last:")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
