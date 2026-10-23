@@ -23,6 +23,7 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
     @Injected() private var determinationStorage: DeterminationStorage!
     @Injected() private var overrideStorage: OverrideStorage!
     @Injected() private var tempTargetStorage: TempTargetsStorage!
+    @Injected() private var carbsStorage: CarbsStorage!
     @Injected() private var adjustmentManager: AdjustmentManager!
     @Injected() private var bolusCalculationManager: BolusCalculationManager!
     @Injected() private var iobService: IOBService!
@@ -99,6 +100,7 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
             .store(in: &subscriptions)
 
         registerHandlers()
+        configurePebbleCommands()
     }
 
     private func registerHandlers() {
@@ -157,6 +159,52 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
                 self.pebbleManager?.sendState(state)
             }
         }.store(in: &subscriptions)
+    }
+
+    private func configurePebbleCommands() {
+        guard let cmdMgr = pebbleManager?.getCommandManager() else { return }
+        cmdMgr.maxBolus = settingsManager.pumpSettings.maxBolus
+        cmdMgr.maxCarbs = settingsManager.settings.maxCarbs
+
+        cmdMgr.executeBolus = { [weak self] amount in
+            guard let self = self else { return }
+            // Commands from Pebble are already "confirmed" on the watch side; enact directly.
+            Task {
+                await self.apsManager.enactBolus(amount: amount, isSMB: false) { success, message in
+                    if success {
+                        PebbleIntegrationFileLogger.log("enact_bolus", "completed units=\(String(format: \"%.2f\", amount)) detail=\(message)")
+                    } else {
+                        PebbleIntegrationFileLogger.log("enact_bolus", "failed units=\(String(format: \"%.2f\", amount)) detail=\(message)")
+                    }
+                }
+            }
+        }
+
+        cmdMgr.executeCarbs = { [weak self] grams, _ in
+            guard let self = self else { return }
+            let entry = CarbsEntry(
+                id: UUID().uuidString,
+                createdAt: Date(),
+                actualDate: nil,
+                carbs: Decimal(grams),
+                fat: nil,
+                protein: nil,
+                note: "Via Pebble",
+                enteredBy: CarbsEntry.local,
+                isFPU: false,
+                fpuID: nil
+            )
+            Task {
+                do {
+                    try await self.carbsStorage.storeCarbs([entry], areFetchedFromRemote: false)
+                    debug(.service, "Pebble: stored carb entry \(grams)g via CarbsStorage")
+                    PebbleIntegrationFileLogger.log("store_carbs", "completed grams=\(String(format: \"%.0f\", grams))g entryId=\(entry.id ?? \"\")")
+                } catch {
+                    debug(.service, "Pebble: error storing carbs: \(error)")
+                    PebbleIntegrationFileLogger.log("store_carbs", "failed grams=\(String(format: \"%.0f\", grams))g error=\(error.localizedDescription)")
+                }
+            }
+        }
     }
 
     /// Sets up the WatchConnectivity session if the device supports it

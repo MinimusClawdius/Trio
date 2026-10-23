@@ -13,6 +13,7 @@ protocol PebbleManager {
     func start()
     func stop()
     func refreshState()
+    func getCommandManager() -> PebbleCommandManager
 }
 
 /// Pebble / Rebble integration:
