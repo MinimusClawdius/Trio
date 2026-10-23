@@ -222,6 +222,9 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
             let tempTargetPresetObjects: [TempTargetStored] = (try? await CoreDataStack.shared
                 .getNSManagedObject(with: tempTargetPresetIds, context: context)) ?? []
 
+            // Fetch reservoir outside the context.perform (it is async and not CoreData-bound)
+            let reservoirUnits: Decimal? = try? await self.fileStorage.retrieveAsync("monitor/reservoir.json", as: Decimal.self)
+
             return await context.perform {
                 var watchState = WatchState(date: Date())
 
@@ -251,7 +254,7 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
                 }
 
                 // Pump reservoir for Pebble /api/all (best effort; many pumps write to monitor/reservoir.json)
-                if let res: Decimal = try? await self.fileStorage.retrieveAsync("monitor/reservoir.json", as: Decimal.self) {
+                if let res = reservoirUnits {
                     watchState.pumpReservoirUnits = res
                 }
 

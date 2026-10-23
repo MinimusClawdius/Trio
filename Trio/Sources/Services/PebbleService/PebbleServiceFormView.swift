@@ -48,7 +48,7 @@ struct PebbleServiceFormView: View {
     }
 
     private var formContent: some View {
-        Form {
+        Form(content: {
             Section {
                 Toggle(
                     String(localized: "Enable Pebble integration", comment: "Pebble service toggle"),
@@ -208,7 +208,7 @@ struct PebbleServiceFormView: View {
                     }
                 }
             }
-        }
+        })
         .navigationTitle(String(localized: "Pebble", comment: "Pebble service navigation title"))
         .navigationBarTitleDisplayMode(.inline)
         .refreshable {
