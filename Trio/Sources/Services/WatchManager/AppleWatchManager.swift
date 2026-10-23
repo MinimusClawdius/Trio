@@ -172,9 +172,9 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
             Task {
                 await self.apsManager.enactBolus(amount: amount, isSMB: false) { success, message in
                     if success {
-                        PebbleIntegrationFileLogger.log("enact_bolus", "completed units=\(String(format: \"%.2f\", amount)) detail=\(message)")
+                        PebbleIntegrationFileLogger.log("enact_bolus", "completed units=" + String(format: "%.2f", amount) + " detail=" + message)
                     } else {
-                        PebbleIntegrationFileLogger.log("enact_bolus", "failed units=\(String(format: \"%.2f\", amount)) detail=\(message)")
+                        PebbleIntegrationFileLogger.log("enact_bolus", "failed units=" + String(format: "%.2f", amount) + " detail=" + message)
                     }
                 }
             }
@@ -198,10 +198,10 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
                 do {
                     try await self.carbsStorage.storeCarbs([entry], areFetchedFromRemote: false)
                     debug(.service, "Pebble: stored carb entry \(grams)g via CarbsStorage")
-                    PebbleIntegrationFileLogger.log("store_carbs", "completed grams=\(String(format: \"%.0f\", grams))g entryId=\(entry.id ?? \"\")")
+                    PebbleIntegrationFileLogger.log("store_carbs", "completed grams=" + String(format: "%.0f", grams) + "g entryId=" + (entry.id ?? ""))
                 } catch {
                     debug(.service, "Pebble: error storing carbs: \(error)")
-                    PebbleIntegrationFileLogger.log("store_carbs", "failed grams=\(String(format: \"%.0f\", grams))g error=\(error.localizedDescription)")
+                    PebbleIntegrationFileLogger.log("store_carbs", "failed grams=" + String(format: "%.0f", grams) + "g error=" + error.localizedDescription)
                 }
             }
         }
