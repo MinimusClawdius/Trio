@@ -131,7 +131,12 @@ final class BasePebbleManager: PebbleManager, Injectable {
         // even if no new Core Data change has fired since the service was enabled).
         Task { [weak self] in
             guard let self else { return }
-            let state = await self.watchManager.setupWatchState()
+            // Resolve on demand to avoid circular DI during BasePebbleManager / BaseWatchManager construction at launch.
+            guard let watchMgr = TrioApp.resolver.resolve(WatchManager.self) else {
+                PebbleIntegrationFileLogger.log("data", "start seed: no WatchManager available")
+                return
+            }
+            let state = await watchMgr.setupWatchState()
             self.sendState(state)
             PebbleIntegrationFileLogger.log("data", "initial seed in start() cgm=\(state.currentGlucose) iob=\(state.iob)")
             debug(.service, "Pebble: seeded initial state for HTTP API (glucose/iob/etc.)")
