@@ -170,7 +170,7 @@ final class BasePebbleManager: PebbleManager, Injectable {
             guard let self else { return }
             let state = await self.watchManager.setupWatchState()
             self.sendState(state)
-            PebbleIntegrationFileLogger.log("data", "refreshState seeded — cgm=\(state.currentGlucose ?? \"nil\") iob=\(state.iob ?? \"nil\") cob=\(state.cob ?? \"nil\") res=\(state.pumpReservoirUnits?.description ?? \"nil\") hist=\(state.glucoseValues.count)")
+            PebbleIntegrationFileLogger.log("data", "refreshState seeded - cgm=\(state.currentGlucose ?? \"nil\") iob=\(state.iob ?? \"nil\") cob=\(state.cob ?? \"nil\") res=\(state.pumpReservoirUnits?.description ?? \"nil\") hist=\(state.glucoseValues.count)")
         }
     }
 
