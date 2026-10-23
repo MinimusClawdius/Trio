@@ -29,7 +29,6 @@ final class BasePebbleManager: PebbleManager, Injectable {
     @Injected() private var bolusCalculationManager: BolusCalculationManager!
     @Injected() private var apsManager: APSManager!
     @Injected() private var determinationStorage: DeterminationStorage!
-    @Injected() private var watchManager: WatchManager!
 
     @Persisted(key: "BasePebbleManager.isEnabled") var isEnabled: Bool = false {
         didSet {
@@ -168,7 +167,12 @@ final class BasePebbleManager: PebbleManager, Injectable {
     func refreshState() {
         Task { [weak self] in
             guard let self else { return }
-            let state = await self.watchManager.setupWatchState()
+            // Resolve on demand to avoid circular DI during BasePebbleManager / BaseWatchManager construction at launch.
+            guard let watchMgr = TrioApp.resolver.resolve(WatchManager.self) else {
+                PebbleIntegrationFileLogger.log("data", "refreshState: no WatchManager available")
+                return
+            }
+            let state = await watchMgr.setupWatchState()
             self.sendState(state)
             PebbleIntegrationFileLogger.log("data", "refreshState seeded - cgm=\(state.currentGlucose) iob=\(state.iob) cob=\(state.cob) res=\(state.pumpReservoirUnits?.description) hist=\(state.glucoseValues.count)")
         }
