@@ -74,7 +74,7 @@ struct PebbleServiceFormView: View {
                 }
 
                 if service.isEnabled {
-                    Link(destination: URL(string: "http://127.0.0.1:\(service.httpPort)/api/all")!) {
+                    SwiftUI.Link(destination: URL(string: "http://127.0.0.1:\(service.httpPort)/api/all")!) {
                         HStack {
                             Text("Quick check: open /api/all in Safari")
                             Image(systemName: "safari")
